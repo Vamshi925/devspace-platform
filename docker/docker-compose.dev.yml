@@ -1,0 +1,19 @@
+services:
+
+  postgres-environment:
+    image: postgres:17
+    container_name: devspace-postgres-environment
+
+    environment:
+      POSTGRES_DB: devspace_environment
+      POSTGRES_USER: devspace
+      POSTGRES_PASSWORD: devspace
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - environment-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  environment-postgres-data:
