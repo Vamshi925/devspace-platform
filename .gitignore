@@ -40,3 +40,6 @@ crash.log
 
 # Misc
 *.tmp
+
+*:Zone.Identifier
+
