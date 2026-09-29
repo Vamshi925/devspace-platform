@@ -10,6 +10,7 @@ import com.devspace.template.dto.request.CreateTemplateRequest;
 import com.devspace.template.dto.response.TemplateResponse;
 import com.devspace.template.model.EnvironmentTemplate;
 import com.devspace.template.repository.EnvironmentTemplateRepository;
+import com.devspace.template.exception.TemplateNotFoundException;
 
 @Service
 public class TemplateService {
@@ -34,7 +35,7 @@ public class TemplateService {
         EnvironmentTemplate template =
                 templateRepository.findById(templateId)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new TemplateNotFoundException(
                                         "Template not found with id: " + templateId
                                 )
                         );
@@ -63,6 +64,56 @@ public class TemplateService {
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }
+
+    // Deactivate Template
+public TemplateResponse deactivateTemplate(String templateId) {
+
+    EnvironmentTemplate template =
+            templateRepository.findById(templateId)
+                    .orElseThrow(() ->
+                            new TemplateNotFoundException(
+                                    "Template not found with id: " + templateId
+                            )
+                    );
+
+    if (Boolean.FALSE.equals(template.getActive())) {
+        throw new IllegalArgumentException(
+                "Template is already inactive"
+        );
+    }
+
+    template.setActive(false);
+
+    EnvironmentTemplate updatedTemplate =
+            templateRepository.save(template);
+
+    return convertToDTO(updatedTemplate);
+}
+
+// Activate Template
+public TemplateResponse activateTemplate(String templateId) {
+
+    EnvironmentTemplate template =
+            templateRepository.findById(templateId)
+                    .orElseThrow(() ->
+                            new TemplateNotFoundException(
+                                    "Template not found with id: " + templateId
+                            )
+                    );
+
+    if (Boolean.TRUE.equals(template.getActive())) {
+        throw new IllegalArgumentException(
+                "Template is already active"
+        );
+    }
+
+    template.setActive(true);
+
+    EnvironmentTemplate updatedTemplate =
+            templateRepository.save(template);
+
+    return convertToDTO(updatedTemplate);
+}
 
     // Convert DTO to Entity
     private EnvironmentTemplate convertToEntity(

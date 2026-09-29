@@ -19,8 +19,8 @@ public class CreateEnvironmentRequest {
     private String applicationName;
 
     @NotNull(message = "Template ID is required")
-    private Long templateId;
-
+    private String templateId;
+    
     @NotNull(message = "Environment type is required")
     private EnvironmentType environmentType;
 

@@ -22,8 +22,8 @@ public class EnvironmentResponse {
 
     private String userId;
 
-    private Long templateId;
-
+    private String templateId;
+    
     private EnvironmentType environmentType;
 
     private EnvironmentStatus status;

@@ -43,7 +43,7 @@ public class EnvironmentServiceApplicationTests {
         environment.setEnvironmentCode("payment-service-a1234");
         environment.setApplicationName("payment-service");
         environment.setUserId("user-001");
-        environment.setTemplateId(1L);
+        environment.setTemplateId("1L");
         environment.setEnvironmentType(EnvironmentType.DEVELOPMENT);
         environment.setStatus(EnvironmentStatus.READY);
         environment.setCreatedAt(Instant.now());
@@ -58,7 +58,7 @@ public class EnvironmentServiceApplicationTests {
                 new CreateEnvironmentRequest();
 
         request.setApplicationName("payment-service");
-        request.setTemplateId(1L);
+        request.setTemplateId("1L");
         request.setEnvironmentType(EnvironmentType.DEVELOPMENT);
         request.setLifetimeHours(8);
         request.setRepositoryUrl("https://github.com/example/payment-service");
@@ -85,7 +85,7 @@ public class EnvironmentServiceApplicationTests {
                 new CreateEnvironmentRequest();
 
         request.setApplicationName("payment-service");
-        request.setTemplateId(1L);
+        request.setTemplateId("1L");
         request.setEnvironmentType(EnvironmentType.DEVELOPMENT);
         request.setLifetimeHours(10);
 

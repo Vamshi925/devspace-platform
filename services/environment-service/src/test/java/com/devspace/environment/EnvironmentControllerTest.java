@@ -41,7 +41,7 @@ public class EnvironmentControllerTest {
                 "payment-service-a1234",
                 "payment-service",
                 "user-001",
-                1L,
+                "1L",
                 EnvironmentType.DEVELOPMENT,
                 EnvironmentStatus.REQUESTED,
                 Instant.now(),

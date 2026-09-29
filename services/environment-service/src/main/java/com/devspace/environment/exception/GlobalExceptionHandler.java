@@ -108,4 +108,39 @@ public ResponseEntity<ErrorResponse> handleAccessDenied(
 
     return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
 }
+
+     @ExceptionHandler(TemplateNotFoundException.class)
+public ResponseEntity<ErrorResponse> handleTemplateNotFound(
+        TemplateNotFoundException ex,
+        HttpServletRequest request) {
+
+    ErrorResponse error = new ErrorResponse(
+            Instant.now(),
+            HttpStatus.BAD_REQUEST.value(),
+            "TEMPLATE_NOT_FOUND",
+            ex.getMessage(),
+            request.getRequestURI()
+    );
+
+    return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+}
+
+@ExceptionHandler(TemplateServiceUnavailableException.class)
+public ResponseEntity<ErrorResponse> handleTemplateServiceUnavailable(
+        TemplateServiceUnavailableException ex,
+        HttpServletRequest request) {
+
+    ErrorResponse error = new ErrorResponse(
+            Instant.now(),
+            HttpStatus.SERVICE_UNAVAILABLE.value(),
+            "TEMPLATE_SERVICE_UNAVAILABLE",
+            ex.getMessage(),
+            request.getRequestURI()
+    );
+
+    return new ResponseEntity<>(
+            error,
+            HttpStatus.SERVICE_UNAVAILABLE
+    );
+}
 }

@@ -61,4 +61,25 @@ public class TemplateController {
 
         return ResponseEntity.ok(template);
     }
+    // Deactivate Template
+@PatchMapping("/{templateId}/deactivate")
+public ResponseEntity<TemplateResponse> deactivateTemplate(
+        @PathVariable String templateId) {
+
+    TemplateResponse template =
+            templateService.deactivateTemplate(templateId);
+
+    return ResponseEntity.ok(template);
+}
+
+// Activate Template
+@PatchMapping("/{templateId}/activate")
+public ResponseEntity<TemplateResponse> activateTemplate(
+        @PathVariable String templateId) {
+
+    TemplateResponse template =
+            templateService.activateTemplate(templateId);
+
+    return ResponseEntity.ok(template);
+}
 }

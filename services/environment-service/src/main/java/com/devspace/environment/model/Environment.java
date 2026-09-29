@@ -42,8 +42,8 @@ public class Environment {
     private String userId;
 
     @Column(name = "templateId", nullable = false)
-    private Long templateId;
-
+    private String templateId;
+    
     @Enumerated(EnumType.STRING)
     @Column(name = "environmentType", nullable = false)
     private EnvironmentType environmentType;
