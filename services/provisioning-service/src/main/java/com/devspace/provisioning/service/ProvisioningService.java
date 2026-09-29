@@ -8,7 +8,7 @@ import com.devspace.provisioning.dto.request.ProvisioningRequest;
 import com.devspace.provisioning.dto.response.ProvisioningResponse;
 import com.devspace.provisioning.dto.request.ProvisioningStatusRequest;
 import com.devspace.provisioning.client.EnvironmentServiceClient;
-import com.devspace.provisioning.client.NamespaceProvisioner;
+import com.devspace.provisioning.kubernetes.NamespaceProvisioner;
 
 @Service
 public class ProvisioningService {
