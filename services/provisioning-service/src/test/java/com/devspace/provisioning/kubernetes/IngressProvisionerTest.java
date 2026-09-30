@@ -20,6 +20,8 @@ import io.fabric8.kubernetes.client.dsl.NetworkAPIGroupDSL;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
 import io.fabric8.kubernetes.client.dsl.Resource;
 
+import com.devspace.provisioning.dto.request.ProvisioningRequest;
+
 @ExtendWith(MockitoExtension.class)
 class IngressProvisionerTest {
 
@@ -49,6 +51,8 @@ class IngressProvisionerTest {
 
     private IngressProvisioner ingressProvisioner;
 
+    private ProvisioningRequest provisioningRequest;
+
     @BeforeEach
     void setUp() {
 
@@ -56,6 +60,29 @@ class IngressProvisionerTest {
                 new IngressProvisioner(
                         kubernetesClient
                 );
+
+        provisioningRequest =
+                new ProvisioningRequest();
+
+        provisioningRequest.setEnvironmentId(
+                "env-123"
+        );
+
+        provisioningRequest.setEnvironmentCode(
+                "payment-service-a1234"
+        );
+
+        provisioningRequest.setApplicationName(
+                "payment-service"
+        );
+
+        provisioningRequest.setTemplateId(
+                "template-123"
+        );
+
+        provisioningRequest.setApplicationPort(
+                80
+        );
 
         when(kubernetesClient.network())
                 .thenReturn(networkAPIGroupDSL);
@@ -80,7 +107,7 @@ class IngressProvisionerTest {
                 "devspace-payment-service-a1234";
 
         String environmentCode =
-                "payment-service-a1234";
+                provisioningRequest.getEnvironmentCode();
 
         String ingressName =
                 environmentCode + "-ingress";
@@ -102,7 +129,7 @@ class IngressProvisionerTest {
 
         ingressProvisioner.createIngress(
                 namespace,
-                environmentCode
+                provisioningRequest
         );
 
         verify(namespacedIngressOperations)
@@ -121,7 +148,7 @@ class IngressProvisionerTest {
                 "devspace-payment-service-a1234";
 
         String environmentCode =
-                "payment-service-a1234";
+                provisioningRequest.getEnvironmentCode();
 
         String ingressName =
                 environmentCode + "-ingress";
@@ -140,15 +167,19 @@ class IngressProvisionerTest {
 
         ingressProvisioner.createIngress(
                 namespace,
-                environmentCode
+                provisioningRequest
         );
 
-        verify(namespacedIngressOperations, never())
-                .resource(
-                        any(Ingress.class)
-                );
+        verify(
+                namespacedIngressOperations,
+                never()
+        ).resource(
+                any(Ingress.class)
+        );
 
-        verify(ingressResource, never())
-                .create();
+        verify(
+                ingressResource,
+                never()
+        ).create();
     }
 }

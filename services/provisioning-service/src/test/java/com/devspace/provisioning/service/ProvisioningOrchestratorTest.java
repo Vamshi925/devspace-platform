@@ -48,12 +48,48 @@ class ProvisioningOrchestratorTest {
     @BeforeEach
     void setUp() {
 
-        provisioningRequest = new ProvisioningRequest();
+        provisioningRequest =
+                new ProvisioningRequest();
 
-        provisioningRequest.setEnvironmentId("env-123");
-        provisioningRequest.setEnvironmentCode("payment-service-a1234");
-        provisioningRequest.setApplicationName("payment-service");
-        provisioningRequest.setTemplateId("template-123");
+        provisioningRequest.setEnvironmentId(
+                "env-123"
+        );
+
+        provisioningRequest.setEnvironmentCode(
+                "payment-service-a1234"
+        );
+
+        provisioningRequest.setApplicationName(
+                "payment-service"
+        );
+
+        provisioningRequest.setTemplateId(
+                "template-123"
+        );
+
+        provisioningRequest.setContainerImage(
+                "nginx:alpine"
+        );
+
+        provisioningRequest.setApplicationPort(
+                80
+        );
+
+        provisioningRequest.setCpuRequest(
+                "100m"
+        );
+
+        provisioningRequest.setCpuLimit(
+                "500m"
+        );
+
+        provisioningRequest.setMemoryRequest(
+                "128Mi"
+        );
+
+        provisioningRequest.setMemoryLimit(
+                "512Mi"
+        );
     }
 
     @Test
@@ -87,26 +123,29 @@ class ProvisioningOrchestratorTest {
                 .createResourceQuota(
                         expectedNamespace
                 );
+
         verify(deploymentProvisioner)
-        .createDeployment(
-                expectedNamespace,
-                provisioningRequest.getEnvironmentCode()
-        );
+                .createDeployment(
+                        expectedNamespace,
+                        provisioningRequest
+                );
+
         verify(serviceProvisioner)
-        .createService(
-                expectedNamespace,
-                provisioningRequest.getEnvironmentCode()
-        );
+                .createService(
+                        expectedNamespace,
+                        provisioningRequest
+                );
+
         verify(ingressProvisioner)
-        .createIngress(
-                expectedNamespace,
-                provisioningRequest.getEnvironmentCode()
-        );
+                .createIngress(
+                        expectedNamespace,
+                        provisioningRequest
+                );
+
         verify(deploymentReadinessChecker)
-        .waitUntilReady(
-                expectedNamespace,
-                provisioningRequest.getEnvironmentCode()
-        );
+                .waitUntilReady(
+                        expectedNamespace,
+                        provisioningRequest.getEnvironmentCode()
+                );
     }
-        
 }

@@ -9,6 +9,8 @@ import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 
+import com.devspace.provisioning.dto.request.ProvisioningRequest;
+
 @Component
 public class DeploymentProvisioner {
 
@@ -25,9 +27,13 @@ public class DeploymentProvisioner {
 
     public void createDeployment(
             String namespace,
-            String environmentCode) {
+            ProvisioningRequest request) {
 
-        String deploymentName = environmentCode;
+        String environmentCode =
+                request.getEnvironmentCode();
+
+        String deploymentName =
+                environmentCode;
 
         Deployment existingDeployment =
                 kubernetesClient.apps()
@@ -49,24 +55,30 @@ public class DeploymentProvisioner {
 
         Deployment deployment =
                 new DeploymentBuilder()
+
                         .withNewMetadata()
                             .withName(deploymentName)
                             .withNamespace(namespace)
+
                             .addToLabels(
                                     "managed-by",
                                     "devspace"
                             )
+
                             .addToLabels(
                                     "environment-code",
                                     environmentCode
                             )
+
                             .addToLabels(
                                     "app",
                                     environmentCode
                             )
+
                         .endMetadata()
 
                         .withNewSpec()
+
                             .withReplicas(1)
 
                             .withNewSelector()
@@ -79,48 +91,67 @@ public class DeploymentProvisioner {
                             .withNewTemplate()
 
                                 .withNewMetadata()
+
                                     .addToLabels(
                                             "app",
                                             environmentCode
                                     )
+
                                     .addToLabels(
                                             "managed-by",
                                             "devspace"
                                     )
+
                                 .endMetadata()
 
                                 .withNewSpec()
 
                                     .addNewContainer()
-                                        .withName(environmentCode)
 
-                                        // Temporary image.
-                                        // Later this will come from the
-                                        // application's built container image.
-                                        .withImage("nginx:alpine")
+                                        .withName(
+                                                environmentCode
+                                        )
+
+                                        .withImage(
+                                                request.getContainerImage()
+                                        )
 
                                         .addNewPort()
-                                            .withContainerPort(80)
+
+                                            .withContainerPort(
+                                                    request.getApplicationPort()
+                                            )
+
                                         .endPort()
 
                                         .withNewResources()
 
                                             .addToRequests(
                                                     "cpu",
-                                                    new Quantity("100m")
+                                                    new Quantity(
+                                                            request.getCpuRequest()
+                                                    )
                                             )
+
                                             .addToRequests(
                                                     "memory",
-                                                    new Quantity("128Mi")
+                                                    new Quantity(
+                                                            request.getMemoryRequest()
+                                                    )
                                             )
 
                                             .addToLimits(
                                                     "cpu",
-                                                    new Quantity("500m")
+                                                    new Quantity(
+                                                            request.getCpuLimit()
+                                                    )
                                             )
+
                                             .addToLimits(
                                                     "memory",
-                                                    new Quantity("512Mi")
+                                                    new Quantity(
+                                                            request.getMemoryLimit()
+                                                    )
                                             )
 
                                         .endResources()
@@ -132,6 +163,7 @@ public class DeploymentProvisioner {
                             .endTemplate()
 
                         .endSpec()
+
                         .build();
 
         kubernetesClient.apps()
@@ -141,9 +173,11 @@ public class DeploymentProvisioner {
                 .create();
 
         logger.info(
-                "Deployment created successfully - Namespace: {}, Deployment: {}",
+                "Deployment created successfully - Namespace: {}, Deployment: {}, Image: {}, Port: {}",
                 namespace,
-                deploymentName
+                deploymentName,
+                request.getContainerImage(),
+                request.getApplicationPort()
         );
     }
 }

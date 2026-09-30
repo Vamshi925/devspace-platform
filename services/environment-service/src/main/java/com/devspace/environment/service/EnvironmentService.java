@@ -44,7 +44,9 @@ public class EnvironmentService {
         String userId) {
 
     // Validate requested lifetime
-    validateLifetime(request.getLifetimeHours());
+    validateLifetime(
+            request.getLifetimeHours()
+    );
 
     // Validate template with Template Service
     TemplateResponse template =
@@ -61,10 +63,13 @@ public class EnvironmentService {
     }
 
     // Convert request DTO to entity
-    Environment environment = convertToEntity(request);
+    Environment environment =
+            convertToEntity(request);
 
     // Set system-controlled values
-    environment.setUserId(userId);
+    environment.setUserId(
+            userId
+    );
 
     environment.setEnvironmentCode(
             generateEnvironmentCode(
@@ -85,7 +90,30 @@ public class EnvironmentService {
 
     // Save initial environment request
     Environment savedEnvironment =
-            environmentRepository.save(environment);
+            environmentRepository.save(
+                    environment
+            );
+
+    /*
+     * IMPORTANT:
+     * Mark the environment as PROVISIONING before
+     * calling Provisioning Service.
+     *
+     * Provisioning Service can callback immediately
+     * and change PROVISIONING -> READY.
+     */
+    savedEnvironment.setStatus(
+            EnvironmentStatus.PROVISIONING
+    );
+
+    savedEnvironment.setFailureReason(
+            null
+    );
+
+    savedEnvironment =
+            environmentRepository.save(
+                    savedEnvironment
+            );
 
     // Build request for Provisioning Service
     ProvisioningRequest provisioningRequest =
@@ -96,7 +124,16 @@ public class EnvironmentService {
                     savedEnvironment.getTemplateId(),
                     savedEnvironment.getExpiresAt(),
                     savedEnvironment.getRepositoryUrl(),
-                    savedEnvironment.getBranchName()
+                    savedEnvironment.getBranchName(),
+
+                    template.getContainerImage(),
+                    template.getApplicationPort(),
+
+                    template.getCpuRequest(),
+                    template.getCpuLimit(),
+
+                    template.getMemoryRequest(),
+                    template.getMemoryLimit()
             );
 
     try {
@@ -107,21 +144,49 @@ public class EnvironmentService {
                         provisioningRequest
                 );
 
-        // Provisioning request accepted
-        if (provisioningResponse != null &&
-                "ACCEPTED".equalsIgnoreCase(
-                        provisioningResponse.getStatus()
-                )) {
+        /*
+         * Do NOT set PROVISIONING again here.
+         *
+         * Provisioning Service may already have called
+         * Environment Service and changed the environment
+         * from PROVISIONING -> READY.
+         */
+        if (provisioningResponse == null) {
 
             savedEnvironment.setStatus(
-                    EnvironmentStatus.PROVISIONING
+                    EnvironmentStatus.FAILED
             );
 
-            savedEnvironment.setFailureReason(null);
+            savedEnvironment.setFailureReason(
+                    "Provisioning Service returned an empty response"
+            );
 
-        } else {
+            savedEnvironment =
+                    environmentRepository.save(
+                            savedEnvironment
+                    );
 
-            // Unexpected response from Provisioning Service
+        } else if ("FAILED".equalsIgnoreCase(
+                provisioningResponse.getStatus()
+        )) {
+
+            savedEnvironment.setStatus(
+                    EnvironmentStatus.FAILED
+            );
+
+            savedEnvironment.setFailureReason(
+                    provisioningResponse.getMessage()
+            );
+
+            savedEnvironment =
+                    environmentRepository.save(
+                            savedEnvironment
+                    );
+
+        } else if (!"ACCEPTED".equalsIgnoreCase(
+                provisioningResponse.getStatus()
+        )) {
+
             savedEnvironment.setStatus(
                     EnvironmentStatus.FAILED
             );
@@ -129,11 +194,15 @@ public class EnvironmentService {
             savedEnvironment.setFailureReason(
                     "Provisioning Service did not accept the provisioning request"
             );
+
+            savedEnvironment =
+                    environmentRepository.save(
+                            savedEnvironment
+                    );
         }
 
     } catch (ProvisioningServiceUnavailableException ex) {
 
-        // Provisioning Service could not be reached or returned server error
         savedEnvironment.setStatus(
                 EnvironmentStatus.FAILED
         );
@@ -141,13 +210,34 @@ public class EnvironmentService {
         savedEnvironment.setFailureReason(
                 ex.getMessage()
         );
+
+        savedEnvironment =
+                environmentRepository.save(
+                        savedEnvironment
+                );
     }
 
-    // Save final lifecycle state
-    savedEnvironment =
-            environmentRepository.save(savedEnvironment);
+    /*
+     * Fetch the latest environment state.
+     *
+     * Provisioning Service may have already called:
+     *
+     * /internal/environments/{id}/provisioning-status
+     *
+     * and changed:
+     *
+     * PROVISIONING -> READY
+     */
+    Environment latestEnvironment =
+            environmentRepository
+                    .findById(
+                            savedEnvironment.getEnvironmentId()
+                    )
+                    .orElse(savedEnvironment);
 
-    return convertToDTO(savedEnvironment);
+    return convertToDTO(
+            latestEnvironment
+    );
 }
     // Get Environment By ID
     public EnvironmentResponse getEnvironmentById(String environmentId,String userId) {

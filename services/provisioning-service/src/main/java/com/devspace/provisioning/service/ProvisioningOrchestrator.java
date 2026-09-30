@@ -28,44 +28,57 @@ public class ProvisioningOrchestrator {
             IngressProvisioner ingressProvisioner,
             DeploymentReadinessChecker deploymentReadinessChecker) {
 
-        this.namespaceProvisioner = namespaceProvisioner;
-        this.resourceQuotaProvisioner = resourceQuotaProvisioner;
-        this.deploymentProvisioner = deploymentProvisioner;
-        this.serviceProvisioner = serviceProvisioner;
-        this.ingressProvisioner = ingressProvisioner;
-        this.deploymentReadinessChecker = deploymentReadinessChecker;
+        this.namespaceProvisioner =
+                namespaceProvisioner;
+
+        this.resourceQuotaProvisioner =
+                resourceQuotaProvisioner;
+
+        this.deploymentProvisioner =
+                deploymentProvisioner;
+
+        this.serviceProvisioner =
+                serviceProvisioner;
+
+        this.ingressProvisioner =
+                ingressProvisioner;
+
+        this.deploymentReadinessChecker =
+                deploymentReadinessChecker;
     }
 
     public String provisionEnvironment(
-        ProvisioningRequest request) {
+            ProvisioningRequest request) {
 
-    String namespace =
-            namespaceProvisioner.createNamespace(
-                    request.getEnvironmentCode()
-            );
+        String namespace =
+                namespaceProvisioner.createNamespace(
+                        request.getEnvironmentCode()
+                );
 
-    resourceQuotaProvisioner.createResourceQuota(
-            namespace
-    );
+        resourceQuotaProvisioner.createResourceQuota(
+                namespace
+        );
 
-    deploymentProvisioner.createDeployment(
-            namespace,
-            request.getEnvironmentCode()
-    );
+        deploymentProvisioner.createDeployment(
+                namespace,
+                request
+        );
 
-    serviceProvisioner.createService(
-            namespace,
-            request.getEnvironmentCode()
-    );
-    ingressProvisioner.createIngress(
-            namespace,
-            request.getEnvironmentCode()
-    );
-    deploymentReadinessChecker.waitUntilReady(
-            namespace,
-            request.getEnvironmentCode()
-    );
+        serviceProvisioner.createService(
+                namespace,
+                request
+        );
 
-    return namespace;
-}
+        ingressProvisioner.createIngress(
+                namespace,
+                request
+        );
+
+        deploymentReadinessChecker.waitUntilReady(
+                namespace,
+                request.getEnvironmentCode()
+        );
+
+        return namespace;
+    }
 }

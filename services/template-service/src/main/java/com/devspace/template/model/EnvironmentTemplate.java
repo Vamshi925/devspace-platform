@@ -76,6 +76,9 @@ public class EnvironmentTemplate {
     @Column(name = "updatedAt", nullable = false)
     private Instant updatedAt;
 
+    @Column(nullable = false)
+    private String containerImage;
+    
     @PrePersist
     public void insert() {
 

@@ -6,6 +6,15 @@ public class TemplateResponse {
     private String name;
     private Boolean active;
 
+    private String containerImage;
+    private Integer applicationPort;
+
+    private String cpuRequest;
+    private String cpuLimit;
+
+    private String memoryRequest;
+    private String memoryLimit;
+
     public TemplateResponse() {
     }
 
@@ -31,5 +40,53 @@ public class TemplateResponse {
 
     public void setActive(Boolean active) {
         this.active = active;
+    }
+
+    public String getContainerImage() {
+        return containerImage;
+    }
+
+    public void setContainerImage(String containerImage) {
+        this.containerImage = containerImage;
+    }
+
+    public Integer getApplicationPort() {
+        return applicationPort;
+    }
+
+    public void setApplicationPort(Integer applicationPort) {
+        this.applicationPort = applicationPort;
+    }
+
+    public String getCpuRequest() {
+        return cpuRequest;
+    }
+
+    public void setCpuRequest(String cpuRequest) {
+        this.cpuRequest = cpuRequest;
+    }
+
+    public String getCpuLimit() {
+        return cpuLimit;
+    }
+
+    public void setCpuLimit(String cpuLimit) {
+        this.cpuLimit = cpuLimit;
+    }
+
+    public String getMemoryRequest() {
+        return memoryRequest;
+    }
+
+    public void setMemoryRequest(String memoryRequest) {
+        this.memoryRequest = memoryRequest;
+    }
+
+    public String getMemoryLimit() {
+        return memoryLimit;
+    }
+
+    public void setMemoryLimit(String memoryLimit) {
+        this.memoryLimit = memoryLimit;
     }
 }

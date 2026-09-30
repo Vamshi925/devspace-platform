@@ -19,6 +19,8 @@ import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
 import io.fabric8.kubernetes.client.dsl.RollableScalableResource;
 
+import com.devspace.provisioning.dto.request.ProvisioningRequest;
+
 @ExtendWith(MockitoExtension.class)
 class DeploymentProvisionerTest {
 
@@ -45,6 +47,8 @@ class DeploymentProvisionerTest {
 
     private DeploymentProvisioner deploymentProvisioner;
 
+    private ProvisioningRequest provisioningRequest;
+
     @BeforeEach
     void setUp() {
 
@@ -52,6 +56,49 @@ class DeploymentProvisionerTest {
                 new DeploymentProvisioner(
                         kubernetesClient
                 );
+
+        provisioningRequest =
+                new ProvisioningRequest();
+
+        provisioningRequest.setEnvironmentId(
+                "env-123"
+        );
+
+        provisioningRequest.setEnvironmentCode(
+                "payment-service-a1234"
+        );
+
+        provisioningRequest.setApplicationName(
+                "payment-service"
+        );
+
+        provisioningRequest.setTemplateId(
+                "template-123"
+        );
+
+        provisioningRequest.setContainerImage(
+                "nginx:alpine"
+        );
+
+        provisioningRequest.setApplicationPort(
+                80
+        );
+
+        provisioningRequest.setCpuRequest(
+                "100m"
+        );
+
+        provisioningRequest.setCpuLimit(
+                "500m"
+        );
+
+        provisioningRequest.setMemoryRequest(
+                "128Mi"
+        );
+
+        provisioningRequest.setMemoryLimit(
+                "512Mi"
+        );
 
         when(kubernetesClient.apps())
                 .thenReturn(appsAPIGroupDSL);
@@ -73,7 +120,7 @@ class DeploymentProvisionerTest {
                 "devspace-payment-service-a1234";
 
         String environmentCode =
-                "payment-service-a1234";
+                provisioningRequest.getEnvironmentCode();
 
         when(
                 namespacedDeploymentOperations.withName(
@@ -92,7 +139,7 @@ class DeploymentProvisionerTest {
 
         deploymentProvisioner.createDeployment(
                 namespace,
-                environmentCode
+                provisioningRequest
         );
 
         verify(namespacedDeploymentOperations)
@@ -111,7 +158,7 @@ class DeploymentProvisionerTest {
                 "devspace-payment-service-a1234";
 
         String environmentCode =
-                "payment-service-a1234";
+                provisioningRequest.getEnvironmentCode();
 
         Deployment existingDeployment =
                 new Deployment();
@@ -127,15 +174,19 @@ class DeploymentProvisionerTest {
 
         deploymentProvisioner.createDeployment(
                 namespace,
-                environmentCode
+                provisioningRequest
         );
 
-        verify(namespacedDeploymentOperations, never())
-                .resource(
-                        any(Deployment.class)
-                );
+        verify(
+                namespacedDeploymentOperations,
+                never()
+        ).resource(
+                any(Deployment.class)
+        );
 
-        verify(deploymentResource, never())
-                .create();
+        verify(
+                deploymentResource,
+                never()
+        ).create();
     }
 }

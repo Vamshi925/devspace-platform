@@ -133,7 +133,7 @@ public TemplateResponse activateTemplate(String templateId) {
         template.setCpuLimit(request.getCpuLimit());
         template.setMemoryRequest(request.getMemoryRequest());
         template.setMemoryLimit(request.getMemoryLimit());
-
+        template.setContainerImage(request.getContainerImage());
         return template;
     }
 
@@ -157,7 +157,8 @@ public TemplateResponse activateTemplate(String templateId) {
                 template.getMemoryLimit(),
                 template.getActive(),
                 template.getCreatedAt(),
-                template.getUpdatedAt()
+                template.getUpdatedAt(),
+                template.getContainerImage()
         );
     }
 }

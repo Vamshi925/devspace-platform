@@ -51,7 +51,7 @@ public class ProvisioningService {
                             null
                     );
 
-            environmentServiceClient.updateProvisioningStatus(
+            updateEnvironmentStatusSafely(
                     request.getEnvironmentId(),
                     statusRequest
             );
@@ -78,7 +78,7 @@ public class ProvisioningService {
                             ex.getMessage()
                     );
 
-            environmentServiceClient.updateProvisioningStatus(
+            updateEnvironmentStatusSafely(
                     request.getEnvironmentId(),
                     statusRequest
             );
@@ -87,6 +87,28 @@ public class ProvisioningService {
                     request.getEnvironmentId(),
                     "FAILED",
                     "Provisioning failed"
+            );
+        }
+    }
+
+    private void updateEnvironmentStatusSafely(
+            String environmentId,
+            ProvisioningStatusRequest statusRequest) {
+
+        try {
+
+            environmentServiceClient.updateProvisioningStatus(
+                    environmentId,
+                    statusRequest
+            );
+
+        } catch (Exception ex) {
+
+            logger.error(
+                    "Failed to update Environment Service status - EnvironmentId: {}, Status: {}",
+                    environmentId,
+                    statusRequest.getStatus(),
+                    ex
             );
         }
     }

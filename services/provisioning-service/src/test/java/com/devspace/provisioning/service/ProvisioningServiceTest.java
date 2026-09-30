@@ -133,4 +133,50 @@ class ProvisioningServiceTest {
                 statusRequest.getFailureReason()
         );
     }
+
+    @Test
+void shouldHandleFailureCallbackExceptionGracefully() {
+
+    when(
+            provisioningOrchestrator.provisionEnvironment(
+                    provisioningRequest
+            )
+    ).thenThrow(
+            new RuntimeException(
+                    "Deployment readiness timeout"
+            )
+    );
+
+    org.mockito.Mockito.doThrow(
+            new RuntimeException(
+                    "Environment service unavailable"
+            )
+    ).when(environmentServiceClient)
+            .updateProvisioningStatus(
+                    eq("env-123"),
+                    org.mockito.ArgumentMatchers.any(
+                            ProvisioningStatusRequest.class
+                    )
+            );
+
+    ProvisioningResponse response =
+            provisioningService.provisionEnvironment(
+                    provisioningRequest
+            );
+
+    assertEquals(
+            "env-123",
+            response.getEnvironmentId()
+    );
+
+    assertEquals(
+            "FAILED",
+            response.getStatus()
+    );
+
+    assertEquals(
+            "Provisioning failed",
+            response.getMessage()
+    );
+}
 }

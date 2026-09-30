@@ -49,4 +49,7 @@ public class CreateTemplateRequest {
 
     @NotBlank(message = "Memory limit is required")
     private String memoryLimit;
+
+    @NotBlank
+    private String containerImage;
 }

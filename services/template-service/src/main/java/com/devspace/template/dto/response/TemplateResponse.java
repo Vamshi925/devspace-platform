@@ -38,4 +38,6 @@ public class TemplateResponse {
 
     private Instant createdAt;
     private Instant updatedAt;
+
+    private String containerImage;
 }

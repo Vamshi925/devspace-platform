@@ -18,6 +18,8 @@ import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
 import io.fabric8.kubernetes.client.dsl.ServiceResource;
 
+import com.devspace.provisioning.dto.request.ProvisioningRequest;
+
 @ExtendWith(MockitoExtension.class)
 class ServiceProvisionerTest {
 
@@ -41,6 +43,8 @@ class ServiceProvisionerTest {
 
     private ServiceProvisioner serviceProvisioner;
 
+    private ProvisioningRequest provisioningRequest;
+
     @BeforeEach
     void setUp() {
 
@@ -48,6 +52,29 @@ class ServiceProvisionerTest {
                 new ServiceProvisioner(
                         kubernetesClient
                 );
+
+        provisioningRequest =
+                new ProvisioningRequest();
+
+        provisioningRequest.setEnvironmentId(
+                "env-123"
+        );
+
+        provisioningRequest.setEnvironmentCode(
+                "payment-service-a1234"
+        );
+
+        provisioningRequest.setApplicationName(
+                "payment-service"
+        );
+
+        provisioningRequest.setTemplateId(
+                "template-123"
+        );
+
+        provisioningRequest.setApplicationPort(
+                80
+        );
 
         when(kubernetesClient.services())
                 .thenReturn(serviceOperations);
@@ -66,7 +93,7 @@ class ServiceProvisionerTest {
                 "devspace-payment-service-a1234";
 
         String environmentCode =
-                "payment-service-a1234";
+                provisioningRequest.getEnvironmentCode();
 
         when(
                 namespacedServiceOperations.withName(
@@ -85,7 +112,7 @@ class ServiceProvisionerTest {
 
         serviceProvisioner.createService(
                 namespace,
-                environmentCode
+                provisioningRequest
         );
 
         verify(namespacedServiceOperations)
@@ -104,7 +131,7 @@ class ServiceProvisionerTest {
                 "devspace-payment-service-a1234";
 
         String environmentCode =
-                "payment-service-a1234";
+                provisioningRequest.getEnvironmentCode();
 
         Service existingService =
                 new Service();
@@ -120,15 +147,19 @@ class ServiceProvisionerTest {
 
         serviceProvisioner.createService(
                 namespace,
-                environmentCode
+                provisioningRequest
         );
 
-        verify(namespacedServiceOperations, never())
-                .resource(
-                        any(Service.class)
-                );
+        verify(
+                namespacedServiceOperations,
+                never()
+        ).resource(
+                any(Service.class)
+        );
 
-        verify(serviceResource, never())
-                .create();
+        verify(
+                serviceResource,
+                never()
+        ).create();
     }
 }

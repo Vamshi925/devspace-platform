@@ -9,6 +9,8 @@ import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.ServiceBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 
+import com.devspace.provisioning.dto.request.ProvisioningRequest;
+
 @Component
 public class ServiceProvisioner {
 
@@ -25,9 +27,13 @@ public class ServiceProvisioner {
 
     public void createService(
             String namespace,
-            String environmentCode) {
+            ProvisioningRequest request) {
 
-        String serviceName = environmentCode;
+        String environmentCode =
+                request.getEnvironmentCode();
+
+        String serviceName =
+                environmentCode;
 
         Service existingService =
                 kubernetesClient.services()
@@ -48,17 +54,22 @@ public class ServiceProvisioner {
 
         Service service =
                 new ServiceBuilder()
+
                         .withNewMetadata()
+
                             .withName(serviceName)
                             .withNamespace(namespace)
+
                             .addToLabels(
                                     "managed-by",
                                     "devspace"
                             )
+
                             .addToLabels(
                                     "environment-code",
                                     environmentCode
                             )
+
                         .endMetadata()
 
                         .withNewSpec()
@@ -71,15 +82,25 @@ public class ServiceProvisioner {
                             )
 
                             .addNewPort()
+
                                 .withName("http")
+
                                 .withProtocol("TCP")
-                                .withPort(80)
-                                .withTargetPort(
-                                        new IntOrString(80)
+
+                                .withPort(
+                                        request.getApplicationPort()
                                 )
+
+                                .withTargetPort(
+                                        new IntOrString(
+                                                request.getApplicationPort()
+                                        )
+                                )
+
                             .endPort()
 
                         .endSpec()
+
                         .build();
 
         kubernetesClient.services()
@@ -88,9 +109,10 @@ public class ServiceProvisioner {
                 .create();
 
         logger.info(
-                "Service created successfully - Namespace: {}, Service: {}",
+                "Service created successfully - Namespace: {}, Service: {}, Port: {}",
                 namespace,
-                serviceName
+                serviceName,
+                request.getApplicationPort()
         );
     }
 }
