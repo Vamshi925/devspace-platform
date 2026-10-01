@@ -18,6 +18,8 @@ import com.devspace.provisioning.kubernetes.DeploymentProvisioner;
 import com.devspace.provisioning.kubernetes.ServiceProvisioner;
 import com.devspace.provisioning.kubernetes.IngressProvisioner;
 import com.devspace.provisioning.kubernetes.DeploymentReadinessChecker;
+import com.devspace.provisioning.kubernetes.ConfigMapProvisioner;
+import com.devspace.provisioning.kubernetes.SecretProvisioner;
 
 @ExtendWith(MockitoExtension.class)
 class ProvisioningOrchestratorTest {
@@ -44,6 +46,12 @@ class ProvisioningOrchestratorTest {
     private ProvisioningOrchestrator provisioningOrchestrator;
 
     private ProvisioningRequest provisioningRequest;
+
+    @Mock
+    private ConfigMapProvisioner configMapProvisioner;
+
+    @Mock
+    private SecretProvisioner secretProvisioner;
 
     @BeforeEach
     void setUp() {
@@ -146,6 +154,16 @@ class ProvisioningOrchestratorTest {
                 .waitUntilReady(
                         expectedNamespace,
                         provisioningRequest.getEnvironmentCode()
+                );
+        verify(configMapProvisioner)
+                .createConfigMap(
+                        expectedNamespace,
+                        provisioningRequest
+                );
+        verify(secretProvisioner)
+                .createSecret(
+                        expectedNamespace,
+                        provisioningRequest
                 );
     }
 }

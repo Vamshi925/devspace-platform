@@ -9,6 +9,8 @@ import com.devspace.provisioning.kubernetes.DeploymentProvisioner;
 import com.devspace.provisioning.kubernetes.ServiceProvisioner;
 import com.devspace.provisioning.kubernetes.IngressProvisioner;
 import com.devspace.provisioning.kubernetes.DeploymentReadinessChecker;
+import com.devspace.provisioning.kubernetes.ConfigMapProvisioner;
+import com.devspace.provisioning.kubernetes.SecretProvisioner;
 
 @Service
 public class ProvisioningOrchestrator {
@@ -19,33 +21,43 @@ public class ProvisioningOrchestrator {
     private final ServiceProvisioner serviceProvisioner;
     private final IngressProvisioner ingressProvisioner;
     private final DeploymentReadinessChecker deploymentReadinessChecker;
+    private final ConfigMapProvisioner configMapProvisioner;
+    private final SecretProvisioner secretProvisioner;
 
     public ProvisioningOrchestrator(
-            NamespaceProvisioner namespaceProvisioner,
-            ResourceQuotaProvisioner resourceQuotaProvisioner,
-            DeploymentProvisioner deploymentProvisioner,
-            ServiceProvisioner serviceProvisioner,
-            IngressProvisioner ingressProvisioner,
-            DeploymentReadinessChecker deploymentReadinessChecker) {
+        NamespaceProvisioner namespaceProvisioner,
+        ResourceQuotaProvisioner resourceQuotaProvisioner,
+        ConfigMapProvisioner configMapProvisioner,
+        SecretProvisioner secretProvisioner,
+        DeploymentProvisioner deploymentProvisioner,
+        ServiceProvisioner serviceProvisioner,
+        IngressProvisioner ingressProvisioner,
+        DeploymentReadinessChecker deploymentReadinessChecker) {
 
-        this.namespaceProvisioner =
-                namespaceProvisioner;
+    this.namespaceProvisioner =
+            namespaceProvisioner;
 
-        this.resourceQuotaProvisioner =
-                resourceQuotaProvisioner;
+    this.resourceQuotaProvisioner =
+            resourceQuotaProvisioner;
 
-        this.deploymentProvisioner =
-                deploymentProvisioner;
+    this.configMapProvisioner =
+            configMapProvisioner;
 
-        this.serviceProvisioner =
-                serviceProvisioner;
+    this.deploymentProvisioner =
+            deploymentProvisioner;
 
-        this.ingressProvisioner =
-                ingressProvisioner;
+    this.secretProvisioner =
+            secretProvisioner;
 
-        this.deploymentReadinessChecker =
-                deploymentReadinessChecker;
-    }
+    this.serviceProvisioner =
+            serviceProvisioner;
+
+    this.ingressProvisioner =
+            ingressProvisioner;
+
+    this.deploymentReadinessChecker =
+            deploymentReadinessChecker;
+}
 
     public String provisionEnvironment(
             ProvisioningRequest request) {
@@ -77,6 +89,14 @@ public class ProvisioningOrchestrator {
         deploymentReadinessChecker.waitUntilReady(
                 namespace,
                 request.getEnvironmentCode()
+        );
+        configMapProvisioner.createConfigMap(
+                namespace,
+                request
+        );
+        secretProvisioner.createSecret(
+                namespace,
+                request
         );
 
         return namespace;
