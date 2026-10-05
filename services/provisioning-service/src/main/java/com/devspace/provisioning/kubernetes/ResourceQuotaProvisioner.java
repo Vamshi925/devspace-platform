@@ -1,9 +1,11 @@
 package com.devspace.provisioning.kubernetes;
 
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceQuota;
@@ -13,13 +15,13 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 @Component
 public class ResourceQuotaProvisioner {
 
-    @Value("${devspace.kubernetes.mock:false}")
-    private boolean mockKubernetes;
-
     private static final Logger logger =
             LoggerFactory.getLogger(ResourceQuotaProvisioner.class);
 
     private final KubernetesClient kubernetesClient;
+
+    @Value("${devspace.kubernetes.mock:false}")
+    private boolean mockKubernetes;
 
     public ResourceQuotaProvisioner(
             KubernetesClient kubernetesClient) {
@@ -27,9 +29,21 @@ public class ResourceQuotaProvisioner {
         this.kubernetesClient = kubernetesClient;
     }
 
-    public void createResourceQuota(String namespace) {
+    public void createResourceQuota(
+            String namespace) {
 
-        String quotaName = "devspace-resource-quota";
+        if (mockKubernetes) {
+
+            logger.info(
+                    "Mock Kubernetes mode - simulating ResourceQuota creation - Namespace: {}",
+                    namespace
+            );
+
+            return;
+        }
+
+        String quotaName =
+                "devspace-resource-quota";
 
         ResourceQuota existingQuota =
                 kubernetesClient.resourceQuotas()
@@ -40,7 +54,7 @@ public class ResourceQuotaProvisioner {
         if (existingQuota != null) {
 
             logger.info(
-                    "ResourceQuota already exists - Namespace: {}, Quota: {}",
+                    "ResourceQuota already exists - Namespace: {}, ResourceQuota: {}",
                     namespace,
                     quotaName
             );
@@ -53,31 +67,25 @@ public class ResourceQuotaProvisioner {
                         .withNewMetadata()
                         .withName(quotaName)
                         .withNamespace(namespace)
-                        .addToLabels(
-                                "managed-by",
-                                "devspace"
-                        )
                         .endMetadata()
                         .withNewSpec()
-                        .addToHard(
-                                "requests.cpu",
-                                new Quantity("2")
-                        )
-                        .addToHard(
-                                "requests.memory",
-                                new Quantity("4Gi")
-                        )
-                        .addToHard(
-                                "limits.cpu",
-                                new Quantity("4")
-                        )
-                        .addToHard(
-                                "limits.memory",
-                                new Quantity("8Gi")
-                        )
-                        .addToHard(
-                                "pods",
-                                new Quantity("10")
+                        .withHard(
+                                Map.of(
+                                        "requests.cpu",
+                                        new Quantity("2"),
+
+                                        "requests.memory",
+                                        new Quantity("4Gi"),
+
+                                        "limits.cpu",
+                                        new Quantity("4"),
+
+                                        "limits.memory",
+                                        new Quantity("8Gi"),
+
+                                        "pods",
+                                        new Quantity("10")
+                                )
                         )
                         .endSpec()
                         .build();
@@ -88,7 +96,7 @@ public class ResourceQuotaProvisioner {
                 .create();
 
         logger.info(
-                "ResourceQuota created successfully - Namespace: {}, Quota: {}",
+                "ResourceQuota created successfully - Namespace: {}, ResourceQuota: {}",
                 namespace,
                 quotaName
         );
