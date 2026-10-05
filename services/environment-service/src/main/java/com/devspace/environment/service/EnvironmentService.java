@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.devspace.environment.dto.request.CreateEnvironmentRequest;
 import com.devspace.environment.dto.request.ProvisioningRequest;
 import com.devspace.environment.dto.request.ProvisioningStatusRequest;
+import com.devspace.environment.dto.request.DeprovisioningRequest;
 import com.devspace.environment.dto.response.EnvironmentResponse;
 import com.devspace.environment.dto.response.TemplateResponse;
 import com.devspace.environment.dto.response.ProvisioningResponse;
@@ -266,34 +267,116 @@ public class EnvironmentService {
 
     // Delete Environment
     public EnvironmentResponse deleteEnvironment(
-            String environmentId,
-            String userId) {
+        String environmentId,
+        String userId) {
 
-        Environment environment = environmentRepository.findById(environmentId)
-                .orElseThrow(() -> new EnvironmentNotFoundException(
-                        "Environment not found with id: " + environmentId));
+    Environment environment =
+            environmentRepository.findById(
+                    environmentId
+            ).orElseThrow(
+                    () -> new EnvironmentNotFoundException(
+                            "Environment not found with id: "
+                                    + environmentId
+                    )
+            );
 
-        if (!environment.getUserId().equals(userId)) {
-            throw new EnvironmentAccessDeniedException(
-                    "You are not allowed to delete this environment");
-        }
+    if (!environment.getUserId().equals(userId)) {
 
-        if (environment.getStatus() == EnvironmentStatus.DELETING ||
-        environment.getStatus() == EnvironmentStatus.DELETED ||
-        environment.getStatus() == EnvironmentStatus.PROVISIONING) {
-
-        throw new IllegalArgumentException(
-                "Environment cannot be deleted while in status: "
-                        + environment.getStatus()
+        throw new EnvironmentAccessDeniedException(
+                "You are not allowed to delete this environment"
         );
     }
 
-        environment.setStatus(EnvironmentStatus.DELETING);
+    if (environment.getStatus()
+            == EnvironmentStatus.DELETED) {
 
-        Environment updatedEnvironment = environmentRepository.save(environment);
-
-        return convertToDTO(updatedEnvironment);
+        throw new IllegalArgumentException(
+                "Environment is already deleted"
+        );
     }
+
+    if (environment.getStatus()
+            == EnvironmentStatus.DELETING) {
+
+        throw new IllegalArgumentException(
+                "Environment deletion is already in progress"
+        );
+    }
+
+    if (environment.getStatus()
+            == EnvironmentStatus.PROVISIONING) {
+
+        throw new IllegalArgumentException(
+                "Environment cannot be deleted while provisioning is in progress"
+        );
+    }
+
+    environment.setStatus(
+            EnvironmentStatus.DELETING
+    );
+
+    environment.setFailureReason(
+            null
+    );
+
+    environment =
+            environmentRepository.save(
+                    environment
+            );
+
+    DeprovisioningRequest deprovisioningRequest =
+            new DeprovisioningRequest(
+                    environment.getEnvironmentId(),
+                    environment.getEnvironmentCode()
+            );
+
+    try {
+
+        ProvisioningResponse response =
+                provisioningServiceClient
+                        .deprovisionEnvironment(
+                                deprovisioningRequest
+                        );
+
+        if (response == null) {
+
+            environment.setFailureReason(
+                    "Provisioning Service returned an empty response during cleanup"
+            );
+
+        } else if ("FAILED".equalsIgnoreCase(
+                response.getStatus()
+        )) {
+
+            environment.setFailureReason(
+                    response.getMessage()
+            );
+        }
+
+    } catch (ProvisioningServiceUnavailableException ex) {
+
+        environment.setFailureReason(
+                ex.getMessage()
+        );
+
+        environmentRepository.save(
+                environment
+        );
+
+        throw ex;
+    }
+
+    Environment latestEnvironment =
+            environmentRepository
+                    .findById(
+                            environmentId
+                    )
+                    .orElse(environment);
+
+    return convertToDTO(
+            latestEnvironment
+    );
+}
 
     // Generate Environment Code
     private String generateEnvironmentCode(String applicationName) {

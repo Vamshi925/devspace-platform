@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,9 @@ import com.devspace.provisioning.client.EnvironmentServiceClient;
 import com.devspace.provisioning.dto.request.ProvisioningRequest;
 import com.devspace.provisioning.dto.request.ProvisioningStatusRequest;
 import com.devspace.provisioning.dto.response.ProvisioningResponse;
+import com.devspace.provisioning.dto.request.DeprovisioningRequest;
+import com.devspace.provisioning.kubernetes.EnvironmentCleanupProvisioner;
+import com.devspace.provisioning.kubernetes.NamespaceDeletionChecker;
 
 @ExtendWith(MockitoExtension.class)
 class ProvisioningServiceTest {
@@ -32,6 +36,12 @@ class ProvisioningServiceTest {
 
     private ProvisioningRequest provisioningRequest;
 
+    @Mock
+    private EnvironmentCleanupProvisioner environmentCleanupProvisioner;
+
+    @Mock
+    private NamespaceDeletionChecker namespaceDeletionChecker;
+
     @BeforeEach
     void setUp() {
 
@@ -44,95 +54,126 @@ class ProvisioningServiceTest {
     }
 
     @Test
-    void shouldProvisionEnvironmentSuccessfully() {
+void shouldDeprovisionEnvironmentSuccessfully() {
 
-        String namespace =
-                "devspace-payment-service-a1234";
+    DeprovisioningRequest request =
+            new DeprovisioningRequest(
+                    "env-123",
+                    "payment-service-a1234"
+            );
 
-        when(
-                provisioningOrchestrator.provisionEnvironment(
-                        provisioningRequest
-                )
-        ).thenReturn(namespace);
+    ProvisioningResponse response =
+            provisioningService.deprovisionEnvironment(
+                    request
+            );
 
-        ProvisioningResponse response =
-                provisioningService.provisionEnvironment(
-                        provisioningRequest
-                );
+    assertEquals(
+            "env-123",
+            response.getEnvironmentId()
+    );
 
-        assertEquals("env-123", response.getEnvironmentId());
-        assertEquals("ACCEPTED", response.getStatus());
-        assertEquals(
-                "Provisioning request accepted",
-                response.getMessage()
-        );
+    assertEquals(
+            "DELETED",
+            response.getStatus()
+    );
 
-        ArgumentCaptor<ProvisioningStatusRequest> captor =
-                ArgumentCaptor.forClass(
-                        ProvisioningStatusRequest.class
-                );
+    assertEquals(
+            "Environment cleanup completed",
+            response.getMessage()
+    );
 
-        verify(environmentServiceClient)
-                .updateProvisioningStatus(
-                        eq("env-123"),
-                        captor.capture()
-                );
+    verify(environmentCleanupProvisioner)
+            .deleteEnvironment(
+                    "payment-service-a1234"
+            );
 
-        ProvisioningStatusRequest statusRequest =
-                captor.getValue();
+    verify(namespaceDeletionChecker)
+            .waitUntilDeleted(
+                    "devspace-payment-service-a1234"
+            );
 
-        assertEquals("READY", statusRequest.getStatus());
-        assertEquals(
-                "devspace-payment-service-a1234",
-                statusRequest.getNamespace()
-        );
-    }
+    ArgumentCaptor<ProvisioningStatusRequest> captor =
+            ArgumentCaptor.forClass(
+                    ProvisioningStatusRequest.class
+            );
+
+    verify(environmentServiceClient)
+            .updateProvisioningStatus(
+                    eq("env-123"),
+                    captor.capture()
+            );
+
+    ProvisioningStatusRequest statusRequest =
+            captor.getValue();
+
+    assertEquals(
+            "DELETED",
+            statusRequest.getStatus()
+    );
+}
 
     @Test
-    void shouldMarkEnvironmentAsFailedWhenProvisioningFails() {
+void shouldMarkEnvironmentFailedWhenDeprovisioningFails() {
 
-        when(
-                provisioningOrchestrator.provisionEnvironment(
-                        provisioningRequest
-                )
-        ).thenThrow(
-                new RuntimeException(
-                        "Failed to create namespace"
-                )
-        );
+    DeprovisioningRequest request =
+            new DeprovisioningRequest(
+                    "env-123",
+                    "payment-service-a1234"
+            );
 
-        ProvisioningResponse response =
-                provisioningService.provisionEnvironment(
-                        provisioningRequest
-                );
+    doThrow(
+            new RuntimeException(
+                    "Failed to delete namespace"
+            )
+    ).when(environmentCleanupProvisioner)
+            .deleteEnvironment(
+                    "payment-service-a1234"
+            );
 
-        assertEquals("env-123", response.getEnvironmentId());
-        assertEquals("FAILED", response.getStatus());
-        assertEquals(
-                "Provisioning failed",
-                response.getMessage()
-        );
+    ProvisioningResponse response =
+            provisioningService.deprovisionEnvironment(
+                    request
+            );
 
-        ArgumentCaptor<ProvisioningStatusRequest> captor =
-                ArgumentCaptor.forClass(
-                        ProvisioningStatusRequest.class
-                );
+    assertEquals(
+            "env-123",
+            response.getEnvironmentId()
+    );
 
-        verify(environmentServiceClient)
-                .updateProvisioningStatus(
-                        eq("env-123"),
-                        captor.capture()
-                );
+    assertEquals(
+            "FAILED",
+            response.getStatus()
+    );
 
-        ProvisioningStatusRequest statusRequest =
-                captor.getValue();
+    assertEquals(
+            "Environment cleanup failed",
+            response.getMessage()
+    );
 
-        assertEquals("FAILED", statusRequest.getStatus());
-        assertEquals(
-                "Failed to create namespace",
-                statusRequest.getFailureReason()
-        );
-    }
+    ArgumentCaptor<ProvisioningStatusRequest> captor =
+            ArgumentCaptor.forClass(
+                    ProvisioningStatusRequest.class
+            );
+
+    verify(environmentServiceClient)
+            .updateProvisioningStatus(
+                    eq("env-123"),
+                    captor.capture()
+            );
+
+    ProvisioningStatusRequest statusRequest =
+            captor.getValue();
+
+    assertEquals(
+            "FAILED",
+            statusRequest.getStatus()
+    );
+
+    assertEquals(
+            "Failed to delete namespace",
+            statusRequest.getFailureReason()
+    );
+}
 
     @Test
 void shouldHandleFailureCallbackExceptionGracefully() {

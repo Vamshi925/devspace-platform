@@ -9,17 +9,6 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-package com.devspace.provisioning.dto.request;
-
-import java.time.Instant;
-
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
 public class ProvisioningRequest {
 
     private String environmentId;
