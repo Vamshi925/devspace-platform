@@ -455,26 +455,104 @@ public class EnvironmentService {
 }
 
 //expire environment
-@Transactional
 public void expireEnvironment(String environmentId) {
 
-    Environment environment = environmentRepository.findById(environmentId)
-            .orElseThrow(() ->
-                    new EnvironmentNotFoundException(
-                            "Environment not found with id: " + environmentId
-                    )
+    Environment environment =
+            environmentRepository.findById(environmentId)
+                    .orElseThrow(() ->
+                            new EnvironmentNotFoundException(
+                                    "Environment not found with id: "
+                                            + environmentId
+                            )
+                    );
+
+    if (environment.getStatus()
+            != EnvironmentStatus.READY) {
+
+        return;
+    }
+
+    if (environment.getExpiresAt()
+            .isAfter(Instant.now())) {
+
+        return;
+    }
+
+    // Step 1: Mark environment as expired
+    environment.setStatus(
+            EnvironmentStatus.EXPIRED
+    );
+
+    environment.setFailureReason(
+            null
+    );
+
+    environment =
+            environmentRepository.save(
+                    environment
             );
 
-    if (environment.getStatus() != EnvironmentStatus.READY) {
-        return;
-    }
+    // Step 2: Move to deletion lifecycle
+    environment.setStatus(
+            EnvironmentStatus.DELETING
+    );
 
-    if (environment.getExpiresAt().isAfter(Instant.now())) {
-        return;
-    }
+    environment =
+            environmentRepository.save(
+                    environment
+            );
 
-    environment.setStatus(EnvironmentStatus.EXPIRED);
+    // Step 3: Ask Provisioning Service to clean up
+    DeprovisioningRequest deprovisioningRequest =
+            new DeprovisioningRequest(
+                    environment.getEnvironmentId(),
+                    environment.getEnvironmentCode()
+            );
+
+    try {
+
+        ProvisioningResponse response =
+                provisioningServiceClient
+                        .deprovisionEnvironment(
+                                deprovisioningRequest
+                        );
+
+        if (response == null) {
+
+            environment.setFailureReason(
+                    "Provisioning Service returned an empty response during expiration cleanup"
+            );
+
+            environmentRepository.save(
+                    environment
+            );
+
+        } else if ("FAILED".equalsIgnoreCase(
+                response.getStatus())) {
+
+            environment.setFailureReason(
+                    response.getMessage()
+            );
+
+            environmentRepository.save(
+                    environment
+            );
+        }
+
+    } catch (ProvisioningServiceUnavailableException ex) {
+
+        environment.setFailureReason(
+                ex.getMessage()
+        );
+
+        environmentRepository.save(
+                environment
+        );
+
+        throw ex;
+    }
 }
+
 public EnvironmentResponse updateProvisioningStatus(
         String environmentId,
         ProvisioningStatusRequest request) {
@@ -488,34 +566,70 @@ public EnvironmentResponse updateProvisioningStatus(
                             )
                     );
 
-    if ("READY".equalsIgnoreCase(request.getStatus())) {
+    // PROVISIONING -> READY
+    if ("READY".equalsIgnoreCase(
+            request.getStatus())) {
 
-        if (environment.getStatus() != EnvironmentStatus.PROVISIONING) {
+        if (environment.getStatus()
+                != EnvironmentStatus.PROVISIONING) {
+
             throw new IllegalArgumentException(
                     "Environment must be in PROVISIONING status before becoming READY"
             );
         }
 
-        environment.setStatus(EnvironmentStatus.READY);
-        environment.setNamespace(request.getNamespace());
-        environment.setApplicationUrl(request.getApplicationUrl());
-        environment.setFailureReason(null);
+        environment.setStatus(
+                EnvironmentStatus.READY
+        );
 
-    } else if ("FAILED".equalsIgnoreCase(request.getStatus())) {
+        environment.setNamespace(
+                request.getNamespace()
+        );
 
-        if (environment.getStatus() != EnvironmentStatus.PROVISIONING) {
+        environment.setApplicationUrl(
+                request.getApplicationUrl()
+        );
+
+        environment.setFailureReason(
+                null
+        );
+
+    // PROVISIONING / DELETING / EXPIRED -> FAILED
+    } else if ("FAILED".equalsIgnoreCase(
+            request.getStatus())) {
+
+        if (environment.getStatus()
+                != EnvironmentStatus.PROVISIONING
+                &&
+            environment.getStatus()
+                != EnvironmentStatus.DELETING
+                &&
+            environment.getStatus()
+                != EnvironmentStatus.EXPIRED) {
+
             throw new IllegalArgumentException(
-                    "Only a provisioning environment can be marked FAILED"
+                    "Environment cannot be marked FAILED from status: "
+                            + environment.getStatus()
             );
         }
 
-        environment.setStatus(EnvironmentStatus.FAILED);
-        environment.setFailureReason(request.getFailureReason());
+        environment.setStatus(
+                EnvironmentStatus.FAILED
+        );
 
-    } else if ("DELETED".equalsIgnoreCase(request.getStatus())) {
+        environment.setFailureReason(
+                request.getFailureReason()
+        );
 
-        if (environment.getStatus() != EnvironmentStatus.DELETING &&
-                environment.getStatus() != EnvironmentStatus.EXPIRED) {
+    // DELETING / EXPIRED -> DELETED
+    } else if ("DELETED".equalsIgnoreCase(
+            request.getStatus())) {
+
+        if (environment.getStatus()
+                != EnvironmentStatus.DELETING
+                &&
+            environment.getStatus()
+                != EnvironmentStatus.EXPIRED) {
 
             throw new IllegalArgumentException(
                     "Environment cannot be marked DELETED from status: "
@@ -523,7 +637,13 @@ public EnvironmentResponse updateProvisioningStatus(
             );
         }
 
-        environment.setStatus(EnvironmentStatus.DELETED);
+        environment.setStatus(
+                EnvironmentStatus.DELETED
+        );
+
+        environment.setFailureReason(
+                null
+        );
 
     } else {
 
@@ -534,9 +654,13 @@ public EnvironmentResponse updateProvisioningStatus(
     }
 
     Environment updatedEnvironment =
-            environmentRepository.save(environment);
+            environmentRepository.save(
+                    environment
+            );
 
-    return convertToDTO(updatedEnvironment);
+    return convertToDTO(
+            updatedEnvironment
+    );
 }
 
     // Convert DTO to Entity
