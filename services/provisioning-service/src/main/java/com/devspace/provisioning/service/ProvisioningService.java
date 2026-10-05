@@ -2,14 +2,15 @@ package com.devspace.provisioning.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.devspace.provisioning.client.EnvironmentServiceClient;
+import com.devspace.provisioning.dto.request.DeprovisioningRequest;
 import com.devspace.provisioning.dto.request.ProvisioningRequest;
 import com.devspace.provisioning.dto.request.ProvisioningStatusRequest;
 import com.devspace.provisioning.dto.response.ProvisioningResponse;
 import com.devspace.provisioning.kubernetes.EnvironmentCleanupProvisioner;
-import com.devspace.provisioning.dto.request.DeprovisioningRequest;
 import com.devspace.provisioning.kubernetes.NamespaceDeletionChecker;
 
 @Service
@@ -17,6 +18,9 @@ public class ProvisioningService {
 
     private static final Logger logger =
             LoggerFactory.getLogger(ProvisioningService.class);
+
+    @Value("${devspace.ingress.base-url}")
+    private String ingressBaseUrl;
 
     private final ProvisioningOrchestrator provisioningOrchestrator;
     private final EnvironmentServiceClient environmentServiceClient;
@@ -52,11 +56,16 @@ public class ProvisioningService {
                             request
                     );
 
+            String applicationUrl =
+                    ingressBaseUrl
+                            + "/"
+                            + request.getEnvironmentCode();
+
             ProvisioningStatusRequest statusRequest =
                     new ProvisioningStatusRequest(
                             "READY",
                             namespace,
-                            null,
+                            applicationUrl,
                             null
                     );
 
@@ -123,72 +132,72 @@ public class ProvisioningService {
     }
 
     public ProvisioningResponse deprovisionEnvironment(
-        DeprovisioningRequest request) {
+            DeprovisioningRequest request) {
 
-    logger.info(
-            "Deprovisioning request received - EnvironmentId: {}, EnvironmentCode: {}",
-            request.getEnvironmentId(),
-            request.getEnvironmentCode()
-    );
-
-    String namespace =
-            "devspace-" + request.getEnvironmentCode();
-
-    try {
-
-        environmentCleanupProvisioner.deleteEnvironment(
+        logger.info(
+                "Deprovisioning request received - EnvironmentId: {}, EnvironmentCode: {}",
+                request.getEnvironmentId(),
                 request.getEnvironmentCode()
         );
 
-        namespaceDeletionChecker.waitUntilDeleted(
-                namespace
-        );
+        String namespace =
+                "devspace-" + request.getEnvironmentCode();
 
-        ProvisioningStatusRequest statusRequest =
-                new ProvisioningStatusRequest(
-                        "DELETED",
-                        null,
-                        null,
-                        null
-                );
+        try {
 
-        updateEnvironmentStatusSafely(
-                request.getEnvironmentId(),
-                statusRequest
-        );
+            environmentCleanupProvisioner.deleteEnvironment(
+                    request.getEnvironmentCode()
+            );
 
-        return new ProvisioningResponse(
-                request.getEnvironmentId(),
-                "DELETED",
-                "Environment cleanup completed"
-        );
+            namespaceDeletionChecker.waitUntilDeleted(
+                    namespace
+            );
 
-    } catch (Exception ex) {
+            ProvisioningStatusRequest statusRequest =
+                    new ProvisioningStatusRequest(
+                            "DELETED",
+                            null,
+                            null,
+                            null
+                    );
 
-        logger.error(
-                "Environment cleanup failed - EnvironmentId: {}",
-                request.getEnvironmentId(),
-                ex
-        );
+            updateEnvironmentStatusSafely(
+                    request.getEnvironmentId(),
+                    statusRequest
+            );
 
-        ProvisioningStatusRequest statusRequest =
-                new ProvisioningStatusRequest(
-                        "FAILED",
-                        null,
-                        null,
-                        ex.getMessage()
-                );
+            return new ProvisioningResponse(
+                    request.getEnvironmentId(),
+                    "DELETED",
+                    "Environment cleanup completed"
+            );
 
-        updateEnvironmentStatusSafely(
-                request.getEnvironmentId(),
-                statusRequest
-        );
+        } catch (Exception ex) {
 
-        return new ProvisioningResponse(
-                request.getEnvironmentId(),
-                "FAILED",
-                "Environment cleanup failed"
-        );
+            logger.error(
+                    "Environment cleanup failed - EnvironmentId: {}",
+                    request.getEnvironmentId(),
+                    ex
+            );
+
+            ProvisioningStatusRequest statusRequest =
+                    new ProvisioningStatusRequest(
+                            "FAILED",
+                            null,
+                            null,
+                            ex.getMessage()
+                    );
+
+            updateEnvironmentStatusSafely(
+                    request.getEnvironmentId(),
+                    statusRequest
+            );
+
+            return new ProvisioningResponse(
+                    request.getEnvironmentId(),
+                    "FAILED",
+                    "Environment cleanup failed"
+            );
+        }
     }
-}
 }
