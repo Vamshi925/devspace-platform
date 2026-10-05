@@ -6,7 +6,7 @@ import java.util.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
+import org.springframework.beans.factory.annotation.Value;
 import com.devspace.provisioning.dto.request.ProvisioningRequest;
 
 import io.fabric8.kubernetes.api.model.Secret;
@@ -15,6 +15,9 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 
 @Component
 public class SecretProvisioner {
+
+    @Value("${devspace.kubernetes.mock:false}")
+    private boolean mockKubernetes;
 
     private static final Logger logger =
             LoggerFactory.getLogger(SecretProvisioner.class);
@@ -30,6 +33,17 @@ public class SecretProvisioner {
     public void createSecret(
             String namespace,
             ProvisioningRequest request) {
+
+        if (mockKubernetes) {
+
+    logger.info(
+            "Mock Kubernetes mode - simulating Secret creation - Namespace: {}, EnvironmentCode: {}",
+            namespace,
+            request.getEnvironmentCode()
+    );
+
+    return;
+}
 
         String secretName =
                 request.getEnvironmentCode() + "-secret";

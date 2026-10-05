@@ -3,6 +3,7 @@ package com.devspace.provisioning.kubernetes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 import io.fabric8.kubernetes.api.model.Namespace;
 import io.fabric8.kubernetes.api.model.NamespaceBuilder;
@@ -10,6 +11,9 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 
 @Component
 public class NamespaceProvisioner {
+
+    @Value("${devspace.kubernetes.mock:false}")
+    private boolean mockKubernetes;
 
     private static final Logger logger =
             LoggerFactory.getLogger(NamespaceProvisioner.class);
@@ -26,6 +30,16 @@ public class NamespaceProvisioner {
 
         String namespaceName =
                 "devspace-" + environmentCode;
+
+        if (mockKubernetes) {
+
+    logger.info(
+            "Mock Kubernetes mode - simulating namespace creation: {}",
+            namespaceName
+    );
+
+    return namespaceName;
+}
 
         Namespace existingNamespace =
                 kubernetesClient.namespaces()

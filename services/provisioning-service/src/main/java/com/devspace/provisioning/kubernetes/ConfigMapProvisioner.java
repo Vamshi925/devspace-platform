@@ -3,6 +3,7 @@ package com.devspace.provisioning.kubernetes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 import com.devspace.provisioning.dto.request.ProvisioningRequest;
 
@@ -12,6 +13,9 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 
 @Component
 public class ConfigMapProvisioner {
+
+    @Value("${devspace.kubernetes.mock:false}")
+    private boolean mockKubernetes;
 
     private static final Logger logger =
             LoggerFactory.getLogger(ConfigMapProvisioner.class);
@@ -27,6 +31,17 @@ public class ConfigMapProvisioner {
     public void createConfigMap(
             String namespace,
             ProvisioningRequest request) {
+
+        if (mockKubernetes) {
+
+    logger.info(
+            "Mock Kubernetes mode - simulating ConfigMap creation - Namespace: {}, EnvironmentCode: {}",
+            namespace,
+            request.getEnvironmentCode()
+    );
+
+    return;
+}
 
         String configMapName =
                 request.getEnvironmentCode() + "-config";

@@ -3,6 +3,7 @@ package com.devspace.provisioning.kubernetes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
@@ -13,6 +14,9 @@ import com.devspace.provisioning.dto.request.ProvisioningRequest;
 
 @Component
 public class DeploymentProvisioner {
+
+    @Value("${devspace.kubernetes.mock:false}")
+    private boolean mockKubernetes;
 
     private static final Logger logger =
             LoggerFactory.getLogger(DeploymentProvisioner.class);
@@ -28,6 +32,19 @@ public class DeploymentProvisioner {
     public void createDeployment(
             String namespace,
             ProvisioningRequest request) {
+
+        if (mockKubernetes) {
+
+    logger.info(
+            "Mock Kubernetes mode - simulating Deployment creation - Namespace: {}, Deployment: {}, Image: {}, Port: {}",
+            namespace,
+            request.getEnvironmentCode(),
+            request.getContainerImage(),
+            request.getApplicationPort()
+    );
+
+    return;
+}
 
         String environmentCode =
                 request.getEnvironmentCode();

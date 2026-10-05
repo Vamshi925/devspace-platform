@@ -3,6 +3,7 @@ package com.devspace.provisioning.kubernetes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 import io.fabric8.kubernetes.api.model.networking.v1.HTTPIngressPathBuilder;
 import io.fabric8.kubernetes.api.model.networking.v1.Ingress;
@@ -13,6 +14,9 @@ import com.devspace.provisioning.dto.request.ProvisioningRequest;
 
 @Component
 public class IngressProvisioner {
+
+    @Value("${devspace.kubernetes.mock:false}")
+    private boolean mockKubernetes;
 
     private static final Logger logger =
             LoggerFactory.getLogger(IngressProvisioner.class);
@@ -28,6 +32,17 @@ public class IngressProvisioner {
     public void createIngress(
             String namespace,
             ProvisioningRequest request) {
+
+        if (mockKubernetes) {
+
+    logger.info(
+            "Mock Kubernetes mode - simulating Ingress creation - Namespace: {}, EnvironmentCode: {}",
+            namespace,
+            request.getEnvironmentCode()
+    );
+
+    return;
+}
 
         String environmentCode =
                 request.getEnvironmentCode();

@@ -5,12 +5,16 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.client.KubernetesClient;
 
 @Component
 public class DeploymentReadinessChecker {
+
+    @Value("${devspace.kubernetes.mock:false}")
+    private boolean mockKubernetes;
 
     private static final Logger logger =
             LoggerFactory.getLogger(DeploymentReadinessChecker.class);
@@ -26,6 +30,17 @@ public class DeploymentReadinessChecker {
     public void waitUntilReady(
             String namespace,
             String deploymentName) {
+
+        if (mockKubernetes) {
+
+    logger.info(
+            "Mock Kubernetes mode - deployment considered READY - Namespace: {}, Deployment: {}",
+            namespace,
+            deploymentName
+    );
+
+    return;
+}
 
         logger.info(
                 "Waiting for deployment readiness - Namespace: {}, Deployment: {}",

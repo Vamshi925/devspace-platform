@@ -3,6 +3,7 @@ package com.devspace.provisioning.kubernetes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceQuota;
@@ -11,6 +12,9 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 
 @Component
 public class ResourceQuotaProvisioner {
+
+    @Value("${devspace.kubernetes.mock:false}")
+    private boolean mockKubernetes;
 
     private static final Logger logger =
             LoggerFactory.getLogger(ResourceQuotaProvisioner.class);
