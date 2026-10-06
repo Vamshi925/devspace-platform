@@ -1,12 +1,13 @@
 package com.devspace.environment.scheduler;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import com.devspace.environment.model.Environment;
 import com.devspace.environment.model.EnvironmentStatus;
@@ -25,27 +26,50 @@ public class EnvironmentExpirationScheduler {
     @Scheduled(fixedRate = 60000)
     public void expireEnvironments() {
 
+        Instant now =
+                Instant.now();
+
         List<Environment> expiredEnvironments =
+                new ArrayList<>();
+
+        expiredEnvironments.addAll(
                 environmentRepository.findExpiredEnvironments(
                         EnvironmentStatus.READY,
-                        Instant.now()
-                );
+                        now
+                )
+        );
+
+        expiredEnvironments.addAll(
+                environmentRepository.findExpiredEnvironments(
+                        EnvironmentStatus.EXPIRED,
+                        now
+                )
+        );
 
         for (Environment environment : expiredEnvironments) {
 
-    try {
+            try {
 
-        environmentService.expireEnvironment(
-                environment.getEnvironmentId()
-        );
+                environmentService.expireEnvironment(
+                        environment.getEnvironmentId()
+                );
 
-    } catch (ObjectOptimisticLockingFailureException ex) {
+            } catch (ObjectOptimisticLockingFailureException ex) {
 
-        System.out.println(
-                "Environment already processed by another instance: "
-                        + environment.getEnvironmentId()
-        );
-    }
-}
+                System.out.println(
+                        "Environment already processed by another instance: "
+                                + environment.getEnvironmentId()
+                );
+
+            } catch (Exception ex) {
+
+                System.out.println(
+                        "Failed to process expired environment: "
+                                + environment.getEnvironmentId()
+                                + " - "
+                                + ex.getMessage()
+                );
+            }
+        }
     }
 }

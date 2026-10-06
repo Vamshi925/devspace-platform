@@ -477,8 +477,9 @@ public void expireEnvironment(String environmentId) {
                             )
                     );
 
-    if (environment.getStatus()
-            != EnvironmentStatus.READY) {
+    if (environment.getStatus() != EnvironmentStatus.READY
+            &&
+        environment.getStatus() != EnvironmentStatus.EXPIRED) {
 
         return;
     }
@@ -489,9 +490,26 @@ public void expireEnvironment(String environmentId) {
         return;
     }
 
-    // Step 1: Mark environment as expired
+    // First time expiration
+    if (environment.getStatus() == EnvironmentStatus.READY) {
+
+        environment.setStatus(
+                EnvironmentStatus.EXPIRED
+        );
+
+        environment.setFailureReason(
+                null
+        );
+
+        environment =
+                environmentRepository.save(
+                        environment
+                );
+    }
+
+    // Start cleanup attempt
     environment.setStatus(
-            EnvironmentStatus.EXPIRED
+            EnvironmentStatus.DELETING
     );
 
     environment.setFailureReason(
@@ -503,17 +521,6 @@ public void expireEnvironment(String environmentId) {
                     environment
             );
 
-    // Step 2: Move to deletion lifecycle
-    environment.setStatus(
-            EnvironmentStatus.DELETING
-    );
-
-    environment =
-            environmentRepository.save(
-                    environment
-            );
-
-    // Step 3: Ask Provisioning Service to clean up
     DeprovisioningRequest deprovisioningRequest =
             new DeprovisioningRequest(
                     environment.getEnvironmentId(),
@@ -530,6 +537,10 @@ public void expireEnvironment(String environmentId) {
 
         if (response == null) {
 
+            environment.setStatus(
+                    EnvironmentStatus.EXPIRED
+            );
+
             environment.setFailureReason(
                     "Provisioning Service returned an empty response during expiration cleanup"
             );
@@ -540,6 +551,10 @@ public void expireEnvironment(String environmentId) {
 
         } else if ("FAILED".equalsIgnoreCase(
                 response.getStatus())) {
+
+            environment.setStatus(
+                    EnvironmentStatus.EXPIRED
+            );
 
             environment.setFailureReason(
                     response.getMessage()
@@ -552,6 +567,10 @@ public void expireEnvironment(String environmentId) {
 
     } catch (ProvisioningServiceUnavailableException ex) {
 
+        environment.setStatus(
+                EnvironmentStatus.EXPIRED
+        );
+
         environment.setFailureReason(
                 ex.getMessage()
         );
@@ -560,7 +579,8 @@ public void expireEnvironment(String environmentId) {
                 environment
         );
 
-        throw ex;
+        // Do not rethrow.
+        // Scheduler will retry later.
     }
 }
 
