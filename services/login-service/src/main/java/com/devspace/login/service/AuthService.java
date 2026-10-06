@@ -166,13 +166,7 @@ public class AuthService {
                 );
 
         return new AuthResponse(
-                token,
-                user.getUserId(),
-                user.getName(),
-                user.getEmail(),
-                user.getPhoneNumber(),
-                user.getRole()
-                        .getRoleName()
-        );
+            token
+    );
     }
 }
