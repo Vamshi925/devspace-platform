@@ -31,11 +31,24 @@ public class User {
     private String userId;
 
     @Column(
+            name = "name",
+            nullable = false
+    )
+    private String name;
+
+    @Column(
             name = "email",
             nullable = false,
             unique = true
     )
     private String email;
+
+    @Column(
+            name = "phone_number",
+            nullable = false,
+            unique = true
+    )
+    private String phoneNumber;
 
     @Column(
             name = "password_hash",
@@ -66,22 +79,16 @@ public class User {
     public void onCreate() {
 
         if (userId == null) {
-            userId =
-                    UUID.randomUUID()
-                            .toString();
+            userId = UUID.randomUUID().toString();
         }
 
-        createdAt =
-                Instant.now();
-
-        updatedAt =
-                Instant.now();
+        createdAt = Instant.now();
+        updatedAt = Instant.now();
     }
 
     @PreUpdate
     public void onUpdate() {
 
-        updatedAt =
-                Instant.now();
+        updatedAt = Instant.now();
     }
 }
