@@ -26,6 +26,7 @@ import com.devspace.environment.model.EnvironmentStatus;
 import com.devspace.environment.repository.EnvironmentRepository;
 import com.devspace.environment.client.TemplateServiceClient;
 import com.devspace.environment.client.ProvisioningServiceClient;
+import com.devspace.environment.client.GitHubRepositoryClient;
 
 @Service
 public class EnvironmentService {
@@ -38,6 +39,9 @@ public class EnvironmentService {
 
     @Autowired
     private ProvisioningServiceClient provisioningServiceClient;
+
+    @Autowired
+    private GitHubRepositoryClient gitHubRepositoryClient;
 
     // Create Environment
     public EnvironmentResponse createEnvironment(
@@ -62,6 +66,13 @@ public class EnvironmentService {
                 "Selected template is not available"
         );
     }
+
+    // Validate GitHub repository and branch
+    gitHubRepositoryClient
+            .validateRepositoryAndBranch(
+                    request.getRepositoryUrl(),
+                    request.getBranchName()
+            );
 
     // Convert request DTO to entity
     Environment environment =

@@ -22,6 +22,7 @@ import com.devspace.environment.dto.request.ProvisioningRequest;
 import com.devspace.environment.dto.response.TemplateResponse;
 import com.devspace.environment.client.TemplateServiceClient;
 import com.devspace.environment.client.ProvisioningServiceClient;
+import com.devspace.environment.client.GitHubRepositoryClient;
 import com.devspace.environment.exception.EnvironmentAccessDeniedException;
 import com.devspace.environment.exception.EnvironmentNotFoundException;
 import com.devspace.environment.model.Environment;
@@ -45,6 +46,9 @@ public class EnvironmentServiceApplicationTests {
 
     @Mock
     private TemplateServiceClient templateServiceClient;
+
+    @Mock
+    private GitHubRepositoryClient gitHubRepositoryClient;
 
     @BeforeEach
     void setUp() {
@@ -242,6 +246,13 @@ void shouldCreateEnvironment() {
     ).findById(
             "env-123"
     );
+    verify(
+        gitHubRepositoryClient,
+        times(1)
+).validateRepositoryAndBranch(
+        "https://github.com/example/payment-service",
+        "main"
+);
 }
 
     @Test
@@ -477,6 +488,122 @@ void shouldDeleteEnvironmentSuccessfully() {
     assertEquals(
             EnvironmentStatus.DELETED,
             response.getStatus()
+    );
+}
+@Test
+void shouldRejectEnvironmentWhenGitHubRepositoryOrBranchIsInvalid() {
+
+    CreateEnvironmentRequest request =
+            new CreateEnvironmentRequest();
+
+    request.setApplicationName(
+            "payment-service"
+    );
+
+    request.setTemplateId(
+            "template-123"
+    );
+
+    request.setEnvironmentType(
+            EnvironmentType.DEVELOPMENT
+    );
+
+    request.setLifetimeHours(
+            8
+    );
+
+    request.setRepositoryUrl(
+            "https://github.com/example/invalid-repository"
+    );
+
+    request.setBranchName(
+            "invalid-branch"
+    );
+
+    TemplateResponse templateResponse =
+            new TemplateResponse();
+
+    templateResponse.setTemplateId(
+            "template-123"
+    );
+
+    templateResponse.setName(
+            "spring-postgres"
+    );
+
+    templateResponse.setActive(
+            true
+    );
+
+    templateResponse.setContainerImage(
+            "nginx:alpine"
+    );
+
+    templateResponse.setApplicationPort(
+            80
+    );
+
+    templateResponse.setCpuRequest(
+            "100m"
+    );
+
+    templateResponse.setCpuLimit(
+            "500m"
+    );
+
+    templateResponse.setMemoryRequest(
+            "128Mi"
+    );
+
+    templateResponse.setMemoryLimit(
+            "512Mi"
+    );
+
+    when(
+            templateServiceClient.getTemplateById(
+                    "template-123"
+            )
+    ).thenReturn(
+            templateResponse
+    );
+
+    doThrow(
+            new IllegalArgumentException(
+                    "GitHub repository or branch not found"
+            )
+    ).when(
+            gitHubRepositoryClient
+    ).validateRepositoryAndBranch(
+            request.getRepositoryUrl(),
+            request.getBranchName()
+    );
+
+    IllegalArgumentException exception =
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> environmentService.createEnvironment(
+                            request,
+                            "user-001"
+                    )
+            );
+
+    assertEquals(
+            "GitHub repository or branch not found",
+            exception.getMessage()
+    );
+
+    verify(
+            environmentRepository,
+            never()
+    ).save(
+            any(Environment.class)
+    );
+
+    verify(
+            provisioningServiceClient,
+            never()
+    ).provisionEnvironment(
+            any(ProvisioningRequest.class)
     );
 }
 }
