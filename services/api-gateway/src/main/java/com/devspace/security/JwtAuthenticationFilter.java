@@ -1,13 +1,16 @@
 package com.devspace.gateway.security;
 
-import org.springframework.core.Ordered;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
-
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 
+import org.springframework.core.Ordered;
+
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+
 import org.springframework.http.server.reactive.ServerHttpRequest;
+
+import org.springframework.stereotype.Component;
 
 import org.springframework.web.server.ServerWebExchange;
 
@@ -36,109 +39,91 @@ public class JwtAuthenticationFilter
                         .getURI()
                         .getPath();
 
-        // Public endpoints
+        HttpMethod method =
+                exchange.getRequest()
+                        .getMethod();
+
+        // Public APIs
         if (isPublicEndpoint(path)) {
 
-            return chain.filter(
-                    exchange
-            );
+            return chain.filter(exchange);
         }
 
         String authHeader =
                 exchange.getRequest()
                         .getHeaders()
-                        .getFirst(
-                                "Authorization"
-                        );
+                        .getFirst("Authorization");
 
         if (authHeader == null
                 ||
-                !authHeader.startsWith(
-                        "Bearer "
-                )) {
+                !authHeader.startsWith("Bearer ")) {
 
-            exchange.getResponse()
-                    .setStatusCode(
-                            HttpStatus.UNAUTHORIZED
-                    );
-
-            return exchange.getResponse()
-                    .setComplete();
+            return unauthorized(exchange);
         }
 
         String token =
                 authHeader.substring(7);
 
-        if (!jwtService.isTokenValid(
-                token)) {
+        if (!jwtService.isTokenValid(token)) {
 
-            exchange.getResponse()
-                    .setStatusCode(
-                            HttpStatus.UNAUTHORIZED
-                    );
-
-            return exchange.getResponse()
-                    .setComplete();
+            return unauthorized(exchange);
         }
 
         String userId =
-                jwtService.extractUserId(
-                        token
-                );
+                jwtService.extractUserId(token);
 
         String role =
-                jwtService.extractRole(
-                        token
-                );
+                jwtService.extractRole(token);
 
         if (userId == null
                 ||
-                userId.isBlank()) {
+                userId.isBlank()
+                ||
+                role == null
+                ||
+                role.isBlank()) {
 
-            exchange.getResponse()
-                    .setStatusCode(
-                            HttpStatus.UNAUTHORIZED
-                    );
-
-            return exchange.getResponse()
-                    .setComplete();
+            return unauthorized(exchange);
         }
+
+        // ----------------------------
+        // Authorization
+        // ----------------------------
+
+        if (requiresAdmin(path, method)
+                &&
+                !"ROLE_ADMIN".equals(role)) {
+
+            return forbidden(exchange);
+        }
+
+        // ----------------------------
+        // Trusted identity headers
+        // ----------------------------
 
         ServerHttpRequest request =
                 exchange.getRequest()
                         .mutate()
+                        .headers(headers -> {
 
-                        // Never trust client-supplied identity.
-                        .headers(
-                                headers -> {
-
-                                    headers.remove(
-                                            "X-User-Id"
-                                    );
-
-                                    headers.remove(
-                                            "X-User-Role"
-                                    );
-                                }
-                        )
-
+                            // Remove anything supplied
+                            // by the client
+                            headers.remove("X-User-Id");
+                            headers.remove("X-User-Role");
+                        })
                         .header(
                                 "X-User-Id",
                                 userId
                         )
-
                         .header(
                                 "X-User-Role",
                                 role
                         )
-
                         .build();
 
         ServerWebExchange mutatedExchange =
                 exchange.mutate()
-                        .request(
-                                request
-                        )
+                        .request(request)
                         .build();
 
         return chain.filter(
@@ -160,6 +145,60 @@ public class JwtAuthenticationFilter
                 path.startsWith(
                         "/actuator"
                 );
+    }
+
+    private boolean requiresAdmin(
+            String path,
+            HttpMethod method) {
+
+        // Only admins can view every environment
+        if (path.equals("/api/environments")
+                &&
+                method == HttpMethod.GET) {
+
+            return true;
+        }
+
+        // Template reads are allowed
+        // for normal authenticated users.
+        //
+        // Template modification is admin-only.
+        if (path.startsWith("/api/templates")) {
+
+            return method == HttpMethod.POST
+                    ||
+                    method == HttpMethod.PUT
+                    ||
+                    method == HttpMethod.PATCH
+                    ||
+                    method == HttpMethod.DELETE;
+        }
+
+        return false;
+    }
+
+    private Mono<Void> unauthorized(
+            ServerWebExchange exchange) {
+
+        exchange.getResponse()
+                .setStatusCode(
+                        HttpStatus.UNAUTHORIZED
+                );
+
+        return exchange.getResponse()
+                .setComplete();
+    }
+
+    private Mono<Void> forbidden(
+            ServerWebExchange exchange) {
+
+        exchange.getResponse()
+                .setStatusCode(
+                        HttpStatus.FORBIDDEN
+                );
+
+        return exchange.getResponse()
+                .setComplete();
     }
 
     @Override
