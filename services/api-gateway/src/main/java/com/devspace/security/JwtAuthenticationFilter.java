@@ -151,6 +151,13 @@ public class JwtAuthenticationFilter
             String path,
             HttpMethod method) {
 
+        
+         if (path.startsWith(
+            "/api/admin/")) {
+
+        return true;
+    }
+
         // Only admins can view every environment
         if (path.equals("/api/environments")
                 &&
