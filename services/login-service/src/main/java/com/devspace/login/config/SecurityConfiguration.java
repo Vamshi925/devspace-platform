@@ -84,6 +84,7 @@ public class SecurityConfiguration {
                                         .requestMatchers(
                                                 "/api/auth/register",
                                                 "/api/auth/login",
+                                                "/api/admin/**",
                                                 "/actuator/**"
                                         )
                                         .permitAll()
