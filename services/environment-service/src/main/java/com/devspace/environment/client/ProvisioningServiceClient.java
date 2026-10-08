@@ -3,7 +3,6 @@ package com.devspace.environment.client;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
