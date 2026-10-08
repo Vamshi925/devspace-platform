@@ -143,23 +143,4 @@ public ResponseEntity<ErrorResponse> handleTemplateServiceUnavailable(
             HttpStatus.SERVICE_UNAVAILABLE
     );
 }
-
-@ExceptionHandler(ForbiddenException.class)
-public ResponseEntity<ErrorResponse> handleForbidden(
-        ForbiddenException ex,
-        HttpServletRequest request) {
-
-    ErrorResponse error =
-            new ErrorResponse(
-                    Instant.now(),
-                    HttpStatus.FORBIDDEN.value(),
-                    "FORBIDDEN",
-                    ex.getMessage(),
-                    request.getRequestURI()
-            );
-
-    return ResponseEntity
-            .status(HttpStatus.FORBIDDEN)
-            .body(error);
-}
 }
