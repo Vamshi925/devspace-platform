@@ -14,15 +14,15 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.devspace.environment.dto.request.CreateEnvironmentRequest;
-import com.devspace.environment.dto.response.EnvironmentResponse;
-import com.devspace.environment.dto.request.DeprovisioningRequest;
-import com.devspace.environment.dto.response.ProvisioningResponse;
-import com.devspace.environment.dto.request.ProvisioningRequest;
-import com.devspace.environment.dto.response.TemplateResponse;
-import com.devspace.environment.client.TemplateServiceClient;
-import com.devspace.environment.client.ProvisioningServiceClient;
 import com.devspace.environment.client.GitHubRepositoryClient;
+import com.devspace.environment.client.ProvisioningServiceClient;
+import com.devspace.environment.client.TemplateServiceClient;
+import com.devspace.environment.dto.request.CreateEnvironmentRequest;
+import com.devspace.environment.dto.request.DeprovisioningRequest;
+import com.devspace.environment.dto.request.ProvisioningRequest;
+import com.devspace.environment.dto.response.EnvironmentResponse;
+import com.devspace.environment.dto.response.ProvisioningResponse;
+import com.devspace.environment.dto.response.TemplateResponse;
 import com.devspace.environment.exception.EnvironmentAccessDeniedException;
 import com.devspace.environment.exception.EnvironmentNotFoundException;
 import com.devspace.environment.model.Environment;
@@ -31,15 +31,10 @@ import com.devspace.environment.model.EnvironmentType;
 import com.devspace.environment.repository.EnvironmentRepository;
 
 @ExtendWith(MockitoExtension.class)
-public class EnvironmentServiceApplicationTests {
+class EnvironmentServiceApplicationTests {
 
     @Mock
     private EnvironmentRepository environmentRepository;
-
-    @InjectMocks
-    private EnvironmentService environmentService;
-
-    private Environment environment;
 
     @Mock
     private ProvisioningServiceClient provisioningServiceClient;
@@ -50,16 +45,19 @@ public class EnvironmentServiceApplicationTests {
     @Mock
     private GitHubRepositoryClient gitHubRepositoryClient;
 
+    @InjectMocks
+    private EnvironmentService environmentService;
+
+    private Environment environment;
+
     @BeforeEach
     void setUp() {
-
         environment = new Environment();
-
         environment.setEnvironmentId("env-123");
         environment.setEnvironmentCode("payment-service-a1234");
         environment.setApplicationName("payment-service");
         environment.setUserId("user-001");
-        environment.setTemplateId("1L");
+        environment.setTemplateId("template-123");
         environment.setEnvironmentType(EnvironmentType.DEVELOPMENT);
         environment.setStatus(EnvironmentStatus.READY);
         environment.setCreatedAt(Instant.now());
@@ -67,203 +65,83 @@ public class EnvironmentServiceApplicationTests {
         environment.setExpiresAt(Instant.now().plusSeconds(3600));
     }
 
-@Test
-void shouldCreateEnvironment() {
+    @Test
+    void shouldCreateEnvironment() {
+        CreateEnvironmentRequest request = createRequest();
+        TemplateResponse template = createTemplate();
 
-    CreateEnvironmentRequest request =
-            new CreateEnvironmentRequest();
+        when(templateServiceClient.getTemplateById("template-123"))
+                .thenReturn(template);
 
-    request.setApplicationName(
-            "payment-service"
-    );
+        when(environmentRepository.save(any(Environment.class)))
+                .thenAnswer(invocation -> {
+                    Environment saved = invocation.getArgument(0);
 
-    request.setTemplateId(
-            "template-123"
-    );
+                    if (saved.getEnvironmentId() == null) {
+                        saved.setEnvironmentId("env-123");
+                    }
 
-    request.setEnvironmentType(
-            EnvironmentType.DEVELOPMENT
-    );
+                    return saved;
+                });
 
-    request.setLifetimeHours(
-            8
-    );
+        ProvisioningResponse provisioningResponse =
+                new ProvisioningResponse();
 
-    request.setRepositoryUrl(
-            "https://github.com/example/payment-service"
-    );
+        provisioningResponse.setEnvironmentId("env-123");
+        provisioningResponse.setStatus("ACCEPTED");
+        provisioningResponse.setMessage(
+                "Provisioning request accepted"
+        );
 
-    request.setBranchName(
-            "main"
-    );
+        when(provisioningServiceClient.provisionEnvironment(
+                any(ProvisioningRequest.class)))
+                .thenReturn(provisioningResponse);
 
-    // Mock Template Service response
-    TemplateResponse templateResponse =
-            new TemplateResponse();
+        when(environmentRepository.findById("env-123"))
+                .thenReturn(Optional.empty());
 
-    templateResponse.setTemplateId(
-            "template-123"
-    );
+        EnvironmentResponse response =
+                environmentService.createEnvironment(
+                        request,
+                        "user-001"
+                );
 
-    templateResponse.setName(
-            "spring-postgres"
-    );
+        assertEquals(
+                "payment-service",
+                response.getApplicationName()
+        );
 
-    templateResponse.setActive(
-            true
-    );
+        assertEquals(
+                "user-001",
+                response.getUserId()
+        );
 
-    templateResponse.setContainerImage(
-            "nginx:alpine"
-    );
+        assertEquals(
+                EnvironmentStatus.PROVISIONING,
+                response.getStatus()
+        );
 
-    templateResponse.setApplicationPort(
-            80
-    );
+        verify(templateServiceClient)
+                .getTemplateById("template-123");
 
-    templateResponse.setCpuRequest(
-            "100m"
-    );
+        verify(provisioningServiceClient)
+                .provisionEnvironment(
+                        any(ProvisioningRequest.class)
+                );
 
-    templateResponse.setCpuLimit(
-            "500m"
-    );
+        verify(environmentRepository, times(2))
+                .save(any(Environment.class));
 
-    templateResponse.setMemoryRequest(
-            "128Mi"
-    );
-
-    templateResponse.setMemoryLimit(
-            "512Mi"
-    );
-
-    when(
-            templateServiceClient.getTemplateById(
-                    "template-123"
-            )
-    ).thenReturn(
-            templateResponse
-    );
-
-    // Mock repository save and simulate ID generation
-    when(
-            environmentRepository.save(
-                    any(Environment.class)
-            )
-    ).thenAnswer(invocation -> {
-
-        Environment environment =
-                invocation.getArgument(0);
-
-        if (environment.getEnvironmentId() == null) {
-
-            environment.setEnvironmentId(
-                    "env-123"
-            );
-        }
-
-        return environment;
-    });
-
-    // Mock Provisioning Service response
-    ProvisioningResponse provisioningResponse =
-            new ProvisioningResponse();
-
-    provisioningResponse.setEnvironmentId(
-            "env-123"
-    );
-
-    provisioningResponse.setStatus(
-            "ACCEPTED"
-    );
-
-    provisioningResponse.setMessage(
-            "Provisioning request accepted"
-    );
-
-    when(
-            provisioningServiceClient.provisionEnvironment(
-                    any(ProvisioningRequest.class)
-            )
-    ).thenReturn(
-            provisioningResponse
-    );
-
-    // Latest state lookup after provisioning call
-    when(
-            environmentRepository.findById(
-                    "env-123"
-            )
-    ).thenReturn(
-            Optional.empty()
-    );
-
-    EnvironmentResponse response =
-            environmentService.createEnvironment(
-                    request,
-                    "user-001"
-            );
-
-    assertEquals(
-            "payment-service",
-            response.getApplicationName()
-    );
-
-    assertEquals(
-            "user-001",
-            response.getUserId()
-    );
-
-    assertEquals(
-            EnvironmentStatus.PROVISIONING,
-            response.getStatus()
-    );
-
-    verify(
-            templateServiceClient,
-            times(1)
-    ).getTemplateById(
-            "template-123"
-    );
-
-    verify(
-            provisioningServiceClient,
-            times(1)
-    ).provisionEnvironment(
-            any(ProvisioningRequest.class)
-    );
-
-    verify(
-            environmentRepository,
-            times(2)
-    ).save(
-            any(Environment.class)
-    );
-
-    verify(
-            environmentRepository,
-            times(1)
-    ).findById(
-            "env-123"
-    );
-    verify(
-        gitHubRepositoryClient,
-        times(1)
-).validateRepositoryAndBranch(
-        "https://github.com/example/payment-service",
-        "main"
-);
-}
+        verify(gitHubRepositoryClient)
+                .validateRepositoryAndBranch(
+                        "https://github.com/example/payment-service",
+                        "main"
+                );
+    }
 
     @Test
     void shouldRejectInvalidLifetime() {
-
-        CreateEnvironmentRequest request =
-                new CreateEnvironmentRequest();
-
-        request.setApplicationName("payment-service");
-        request.setTemplateId("1L");
-        request.setEnvironmentType(EnvironmentType.DEVELOPMENT);
+        CreateEnvironmentRequest request = createRequest();
         request.setLifetimeHours(10);
 
         assertThrows(
@@ -280,23 +158,47 @@ void shouldCreateEnvironment() {
 
     @Test
     void shouldGetEnvironmentById() {
-
         when(environmentRepository.findById("env-123"))
                 .thenReturn(Optional.of(environment));
 
         EnvironmentResponse response =
                 environmentService.getEnvironmentById(
                         "env-123",
-                        "user-001"
+                        "user-001",
+                        "ROLE_USER"
                 );
 
-        assertEquals("env-123", response.getEnvironmentId());
-        assertEquals("payment-service", response.getApplicationName());
+        assertEquals(
+                "env-123",
+                response.getEnvironmentId()
+        );
+
+        assertEquals(
+                "payment-service",
+                response.getApplicationName()
+        );
+    }
+
+    @Test
+    void shouldAllowAdminToAccessAnyEnvironment() {
+        when(environmentRepository.findById("env-123"))
+                .thenReturn(Optional.of(environment));
+
+        EnvironmentResponse response =
+                environmentService.getEnvironmentById(
+                        "env-123",
+                        "admin-001",
+                        "ROLE_ADMIN"
+                );
+
+        assertEquals(
+                "env-123",
+                response.getEnvironmentId()
+        );
     }
 
     @Test
     void shouldThrowExceptionWhenEnvironmentNotFound() {
-
         when(environmentRepository.findById("invalid-id"))
                 .thenReturn(Optional.empty());
 
@@ -304,14 +206,14 @@ void shouldCreateEnvironment() {
                 EnvironmentNotFoundException.class,
                 () -> environmentService.getEnvironmentById(
                         "invalid-id",
-                        "user-001"
+                        "user-001",
+                        "ROLE_USER"
                 )
         );
     }
 
     @Test
     void shouldRejectAccessForDifferentUser() {
-
         when(environmentRepository.findById("env-123"))
                 .thenReturn(Optional.of(environment));
 
@@ -319,24 +221,27 @@ void shouldCreateEnvironment() {
                 EnvironmentAccessDeniedException.class,
                 () -> environmentService.getEnvironmentById(
                         "env-123",
-                        "user-002"
+                        "user-002",
+                        "ROLE_USER"
                 )
         );
     }
 
     @Test
     void shouldMarkEnvironmentAsDeleting() {
-
         when(environmentRepository.findById("env-123"))
                 .thenReturn(Optional.of(environment));
 
         when(environmentRepository.save(any(Environment.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation ->
+                        invocation.getArgument(0)
+                );
 
         EnvironmentResponse response =
                 environmentService.deleteEnvironment(
                         "env-123",
-                        "user-001"
+                        "user-001",
+                        "ROLE_USER"
                 );
 
         assertEquals(
@@ -347,7 +252,6 @@ void shouldCreateEnvironment() {
 
     @Test
     void shouldRejectDeleteWhenAlreadyDeleting() {
-
         environment.setStatus(EnvironmentStatus.DELETING);
 
         when(environmentRepository.findById("env-123"))
@@ -357,26 +261,68 @@ void shouldCreateEnvironment() {
                 IllegalArgumentException.class,
                 () -> environmentService.deleteEnvironment(
                         "env-123",
-                        "user-001"
+                        "user-001",
+                        "ROLE_USER"
                 )
         );
     }
 
     @Test
-    void shouldExtendReadyEnvironment() {
+    void shouldRejectDeleteForDifferentUser() {
+        when(environmentRepository.findById("env-123"))
+                .thenReturn(Optional.of(environment));
 
+        assertThrows(
+                EnvironmentAccessDeniedException.class,
+                () -> environmentService.deleteEnvironment(
+                        "env-123",
+                        "user-002",
+                        "ROLE_USER"
+                )
+        );
+    }
+
+    @Test
+    void shouldAllowAdminToDeleteAnyEnvironment() {
         when(environmentRepository.findById("env-123"))
                 .thenReturn(Optional.of(environment));
 
         when(environmentRepository.save(any(Environment.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation ->
+                        invocation.getArgument(0)
+                );
 
-        Instant oldExpiry = environment.getExpiresAt();
+        EnvironmentResponse response =
+                environmentService.deleteEnvironment(
+                        "env-123",
+                        "admin-001",
+                        "ROLE_ADMIN"
+                );
+
+        assertEquals(
+                EnvironmentStatus.DELETING,
+                response.getStatus()
+        );
+    }
+
+    @Test
+    void shouldExtendReadyEnvironment() {
+        when(environmentRepository.findById("env-123"))
+                .thenReturn(Optional.of(environment));
+
+        when(environmentRepository.save(any(Environment.class)))
+                .thenAnswer(invocation ->
+                        invocation.getArgument(0)
+                );
+
+        Instant oldExpiry =
+                environment.getExpiresAt();
 
         EnvironmentResponse response =
                 environmentService.extendEnvironment(
                         "env-123",
                         "user-001",
+                        "ROLE_USER",
                         4
                 );
 
@@ -388,7 +334,6 @@ void shouldCreateEnvironment() {
 
     @Test
     void shouldRejectExtensionWhenEnvironmentNotReady() {
-
         environment.setStatus(EnvironmentStatus.DELETING);
 
         when(environmentRepository.findById("env-123"))
@@ -399,211 +344,176 @@ void shouldCreateEnvironment() {
                 () -> environmentService.extendEnvironment(
                         "env-123",
                         "user-001",
+                        "ROLE_USER",
                         4
                 )
         );
     }
 
     @Test
-void shouldDeleteEnvironmentSuccessfully() {
+    void shouldRejectExtensionForDifferentUser() {
+        when(environmentRepository.findById("env-123"))
+                .thenReturn(Optional.of(environment));
 
-    String environmentId = "env-123";
-    String userId = "user-001";
+        assertThrows(
+                EnvironmentAccessDeniedException.class,
+                () -> environmentService.extendEnvironment(
+                        "env-123",
+                        "user-002",
+                        "ROLE_USER",
+                        4
+                )
+        );
+    }
 
-    Environment environment = new Environment();
+    @Test
+    void shouldAllowAdminToExtendAnyEnvironment() {
+        when(environmentRepository.findById("env-123"))
+                .thenReturn(Optional.of(environment));
 
-    environment.setEnvironmentId(environmentId);
-    environment.setEnvironmentCode("payment-service-a1234");
-    environment.setUserId(userId);
-    environment.setStatus(EnvironmentStatus.READY);
+        when(environmentRepository.save(any(Environment.class)))
+                .thenAnswer(invocation ->
+                        invocation.getArgument(0)
+                );
 
-    when(
-            environmentRepository.findById(
-                    environmentId
-            )
-    ).thenReturn(
-            Optional.of(environment)
-    );
+        Instant oldExpiry =
+                environment.getExpiresAt();
 
-    when(
-            environmentRepository.save(
-                    any(Environment.class)
-            )
-    ).thenAnswer(
-            invocation -> invocation.getArgument(0)
-    );
+        EnvironmentResponse response =
+                environmentService.extendEnvironment(
+                        "env-123",
+                        "admin-001",
+                        "ROLE_ADMIN",
+                        4
+                );
 
-    ProvisioningResponse provisioningResponse =
-            new ProvisioningResponse();
+        assertEquals(
+                oldExpiry.plusSeconds(4 * 60 * 60),
+                response.getExpiresAt()
+        );
+    }
 
-    provisioningResponse.setEnvironmentId(
-            environmentId
-    );
+    @Test
+    void shouldDeleteEnvironmentSuccessfully() {
+        ProvisioningResponse provisioningResponse =
+                new ProvisioningResponse();
 
-    provisioningResponse.setStatus(
-            "DELETED"
-    );
-
-    provisioningResponse.setMessage(
-            "Environment cleanup completed"
-    );
-
-    when(
-            provisioningServiceClient.deprovisionEnvironment(
-                    any(DeprovisioningRequest.class)
-            )
-    ).thenReturn(
-            provisioningResponse
-    );
-
-    when(
-            environmentRepository.findById(
-                    environmentId
-            )
-    )
-    .thenReturn(
-            Optional.of(environment)
-    )
-    .thenAnswer(invocation -> {
-
-        environment.setStatus(
-                EnvironmentStatus.DELETED
+        provisioningResponse.setEnvironmentId("env-123");
+        provisioningResponse.setStatus("DELETED");
+        provisioningResponse.setMessage(
+                "Environment cleanup completed"
         );
 
-        return Optional.of(environment);
-    });
+        when(environmentRepository.findById("env-123"))
+                .thenReturn(Optional.of(environment))
+                .thenAnswer(invocation -> {
+                    environment.setStatus(
+                            EnvironmentStatus.DELETED
+                    );
 
-    EnvironmentResponse response =
-            environmentService.deleteEnvironment(
-                    environmentId,
-                    userId
-            );
+                    return Optional.of(environment);
+                });
 
-    verify(
-            provisioningServiceClient
-    ).deprovisionEnvironment(
-            any(DeprovisioningRequest.class)
-    );
+        when(environmentRepository.save(any(Environment.class)))
+                .thenAnswer(invocation ->
+                        invocation.getArgument(0)
+                );
 
-    assertEquals(
-            EnvironmentStatus.DELETED,
-            response.getStatus()
-    );
-}
-@Test
-void shouldRejectEnvironmentWhenGitHubRepositoryOrBranchIsInvalid() {
+        when(provisioningServiceClient.deprovisionEnvironment(
+                any(DeprovisioningRequest.class)))
+                .thenReturn(provisioningResponse);
 
-    CreateEnvironmentRequest request =
-            new CreateEnvironmentRequest();
+        EnvironmentResponse response =
+                environmentService.deleteEnvironment(
+                        "env-123",
+                        "user-001",
+                        "ROLE_USER"
+                );
 
-    request.setApplicationName(
-            "payment-service"
-    );
+        verify(provisioningServiceClient)
+                .deprovisionEnvironment(
+                        any(DeprovisioningRequest.class)
+                );
 
-    request.setTemplateId(
-            "template-123"
-    );
+        assertEquals(
+                EnvironmentStatus.DELETED,
+                response.getStatus()
+        );
+    }
 
-    request.setEnvironmentType(
-            EnvironmentType.DEVELOPMENT
-    );
+    @Test
+    void shouldRejectEnvironmentWhenGitHubRepositoryOrBranchIsInvalid() {
+        CreateEnvironmentRequest request =
+                createRequest();
 
-    request.setLifetimeHours(
-            8
-    );
+        when(templateServiceClient.getTemplateById("template-123"))
+                .thenReturn(createTemplate());
 
-    request.setRepositoryUrl(
-            "https://github.com/example/invalid-repository"
-    );
+        doThrow(
+                new IllegalArgumentException(
+                        "GitHub repository or branch not found"
+                )
+        ).when(gitHubRepositoryClient)
+                .validateRepositoryAndBranch(
+                        request.getRepositoryUrl(),
+                        request.getBranchName()
+                );
 
-    request.setBranchName(
-            "invalid-branch"
-    );
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> environmentService.createEnvironment(
+                                request,
+                                "user-001"
+                        )
+                );
 
-    TemplateResponse templateResponse =
-            new TemplateResponse();
+        assertEquals(
+                "GitHub repository or branch not found",
+                exception.getMessage()
+        );
 
-    templateResponse.setTemplateId(
-            "template-123"
-    );
+        verify(environmentRepository, never())
+                .save(any(Environment.class));
 
-    templateResponse.setName(
-            "spring-postgres"
-    );
+        verify(provisioningServiceClient, never())
+                .provisionEnvironment(
+                        any(ProvisioningRequest.class)
+                );
+    }
 
-    templateResponse.setActive(
-            true
-    );
+    private CreateEnvironmentRequest createRequest() {
+        CreateEnvironmentRequest request =
+                new CreateEnvironmentRequest();
 
-    templateResponse.setContainerImage(
-            "nginx:alpine"
-    );
+        request.setApplicationName("payment-service");
+        request.setTemplateId("template-123");
+        request.setEnvironmentType(
+                EnvironmentType.DEVELOPMENT
+        );
+        request.setLifetimeHours(8);
+        request.setRepositoryUrl(
+                "https://github.com/example/payment-service"
+        );
+        request.setBranchName("main");
 
-    templateResponse.setApplicationPort(
-            80
-    );
+        return request;
+    }
 
-    templateResponse.setCpuRequest(
-            "100m"
-    );
+    private TemplateResponse createTemplate() {
+        TemplateResponse template =
+                new TemplateResponse();
 
-    templateResponse.setCpuLimit(
-            "500m"
-    );
+        template.setTemplateId("template-123");
+        template.setName("spring-postgres");
+        template.setActive(true);
+        template.setContainerImage("nginx:alpine");
+        template.setApplicationPort(80);
+        template.setCpuRequest("100m");
+        template.setCpuLimit("500m");
+        template.setMemoryRequest("128Mi");
+        template.setMemoryLimit("512Mi");
 
-    templateResponse.setMemoryRequest(
-            "128Mi"
-    );
-
-    templateResponse.setMemoryLimit(
-            "512Mi"
-    );
-
-    when(
-            templateServiceClient.getTemplateById(
-                    "template-123"
-            )
-    ).thenReturn(
-            templateResponse
-    );
-
-    doThrow(
-            new IllegalArgumentException(
-                    "GitHub repository or branch not found"
-            )
-    ).when(
-            gitHubRepositoryClient
-    ).validateRepositoryAndBranch(
-            request.getRepositoryUrl(),
-            request.getBranchName()
-    );
-
-    IllegalArgumentException exception =
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> environmentService.createEnvironment(
-                            request,
-                            "user-001"
-                    )
-            );
-
-    assertEquals(
-            "GitHub repository or branch not found",
-            exception.getMessage()
-    );
-
-    verify(
-            environmentRepository,
-            never()
-    ).save(
-            any(Environment.class)
-    );
-
-    verify(
-            provisioningServiceClient,
-            never()
-    ).provisionEnvironment(
-            any(ProvisioningRequest.class)
-    );
-}
+        return template;
+    }
 }
