@@ -35,11 +35,11 @@ public class TemplateServiceClient {
 
         return restClient.get()
                 .uri("/api/templates/{templateId}", templateId)
-                .retrieve()
                 .header(
                         "X-Internal-Api-Key",
                         internalApiKey
                 )
+                .retrieve()
                 .body(TemplateResponse.class);
 
     } catch (org.springframework.web.client.HttpClientErrorException.NotFound ex) {
