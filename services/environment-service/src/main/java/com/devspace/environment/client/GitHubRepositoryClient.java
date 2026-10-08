@@ -10,40 +10,33 @@ public class GitHubRepositoryClient {
     private final RestClient restClient;
 
     public GitHubRepositoryClient() {
-
-        this.restClient =
-                RestClient.builder()
-                        .baseUrl("https://api.github.com")
-                        .defaultHeader(
-                                "Accept",
-                                "application/vnd.github+json"
-                        )
-                        .build();
+        this.restClient = RestClient.builder()
+                .baseUrl("https://api.github.com")
+                .defaultHeader("Accept", "application/vnd.github+json")
+                .defaultHeader("User-Agent", "DevSpace-Environment-Service")
+                .defaultHeader("X-GitHub-Api-Version", "2022-11-28")
+                .build();
     }
 
     public void validateRepositoryAndBranch(
             String repositoryUrl,
             String branchName) {
 
-        GitHubRepositoryInfo repositoryInfo =
-                extractRepositoryInfo(
-                        repositoryUrl
-                );
+        GitHubRepositoryInfo repo =
+                extractRepositoryInfo(repositoryUrl);
 
         try {
-
             restClient.get()
                     .uri(
-                            "/repos/{owner}/{repository}/branches/{branch}",
-                            repositoryInfo.owner(),
-                            repositoryInfo.repository(),
+                            "/repos/{owner}/{repo}/branches/{branch}",
+                            repo.owner(),
+                            repo.repository(),
                             branchName
                     )
                     .retrieve()
                     .toBodilessEntity();
 
         } catch (HttpClientErrorException.NotFound ex) {
-
             throw new IllegalArgumentException(
                     "GitHub repository or branch not found: "
                             + repositoryUrl
@@ -53,7 +46,6 @@ public class GitHubRepositoryClient {
             );
 
         } catch (HttpClientErrorException ex) {
-
             throw new IllegalArgumentException(
                     "Unable to validate GitHub repository: "
                             + ex.getStatusCode()
@@ -64,9 +56,7 @@ public class GitHubRepositoryClient {
     private GitHubRepositoryInfo extractRepositoryInfo(
             String repositoryUrl) {
 
-        if (repositoryUrl == null
-                || repositoryUrl.isBlank()) {
-
+        if (repositoryUrl == null || repositoryUrl.isBlank()) {
             throw new IllegalArgumentException(
                     "Repository URL is required"
             );
@@ -80,23 +70,17 @@ public class GitHubRepositoryClient {
             );
         }
 
-        String path =
-                repositoryUrl.replace(
-                        "https://github.com/",
-                        ""
-                );
+        String path = repositoryUrl
+                .replace("https://github.com/", "");
 
         if (path.endsWith(".git")) {
-
-            path =
-                    path.substring(
-                            0,
-                            path.length() - 4
-                    );
+            path = path.substring(
+                    0,
+                    path.length() - 4
+            );
         }
 
-        String[] parts =
-                path.split("/");
+        String[] parts = path.split("/");
 
         if (parts.length != 2
                 || parts[0].isBlank()
