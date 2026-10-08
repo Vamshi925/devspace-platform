@@ -11,11 +11,10 @@ import java.time.Instant;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.devspace.environment.dto.response.EnvironmentResponse;
@@ -26,7 +25,7 @@ import com.devspace.environment.model.EnvironmentType;
 import com.devspace.environment.service.EnvironmentService;
 
 @WebMvcTest(EnvironmentController.class)
-public class EnvironmentControllerTest {
+class EnvironmentControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -35,7 +34,6 @@ public class EnvironmentControllerTest {
     private EnvironmentService environmentService;
 
     private EnvironmentResponse createResponse() {
-
         return new EnvironmentResponse(
                 "env-123",
                 "payment-service-a1234",
@@ -57,7 +55,6 @@ public class EnvironmentControllerTest {
 
     @Test
     void shouldCreateEnvironment() throws Exception {
-
         when(environmentService.createEnvironment(any(), anyString()))
                 .thenReturn(createResponse());
 
@@ -67,7 +64,7 @@ public class EnvironmentControllerTest {
                         .content("""
                                 {
                                   "applicationName": "payment-service",
-                                  "templateId": 1,
+                                  "templateId": "1L",
                                   "environmentType": "DEVELOPMENT",
                                   "lifetimeHours": 8,
                                   "repositoryUrl": "https://github.com/example/payment-service",
@@ -75,12 +72,9 @@ public class EnvironmentControllerTest {
                                 }
                                 """))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.applicationName")
-                        .value("payment-service"))
-                .andExpect(jsonPath("$.userId")
-                        .value("user-001"))
-                .andExpect(jsonPath("$.status")
-                        .value("REQUESTED"));
+                .andExpect(jsonPath("$.applicationName").value("payment-service"))
+                .andExpect(jsonPath("$.userId").value("user-001"))
+                .andExpect(jsonPath("$.status").value("REQUESTED"));
     }
 
     @Test
@@ -92,31 +86,30 @@ public class EnvironmentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "templateId": 1,
+                                  "templateId": "1L",
                                   "environmentType": "DEVELOPMENT",
                                   "lifetimeHours": 8
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error")
-                        .value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.message")
                         .value("Application name is required"));
     }
 
     @Test
     void shouldGetEnvironmentById() throws Exception {
-
         when(environmentService.getEnvironmentById(
                 "env-123",
-                "user-001"
+                "user-001",
+                "ROLE_USER"
         )).thenReturn(createResponse());
 
         mockMvc.perform(get("/api/environments/env-123")
-                        .header("X-User-Id", "user-001"))
+                        .header("X-User-Id", "user-001")
+                        .header("X-User-Role", "ROLE_USER"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.environmentId")
-                        .value("env-123"))
+                .andExpect(jsonPath("$.environmentId").value("env-123"))
                 .andExpect(jsonPath("$.applicationName")
                         .value("payment-service"));
     }
@@ -127,7 +120,8 @@ public class EnvironmentControllerTest {
 
         when(environmentService.getEnvironmentById(
                 "invalid-id",
-                "user-001"
+                "user-001",
+                "ROLE_USER"
         )).thenThrow(
                 new EnvironmentNotFoundException(
                         "Environment not found with id: invalid-id"
@@ -135,7 +129,8 @@ public class EnvironmentControllerTest {
         );
 
         mockMvc.perform(get("/api/environments/invalid-id")
-                        .header("X-User-Id", "user-001"))
+                        .header("X-User-Id", "user-001")
+                        .header("X-User-Role", "ROLE_USER"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error")
                         .value("ENVIRONMENT_NOT_FOUND"));
@@ -147,7 +142,8 @@ public class EnvironmentControllerTest {
 
         when(environmentService.getEnvironmentById(
                 "env-123",
-                "user-002"
+                "user-002",
+                "ROLE_USER"
         )).thenThrow(
                 new EnvironmentAccessDeniedException(
                         "You are not allowed to access this environment"
@@ -155,50 +151,48 @@ public class EnvironmentControllerTest {
         );
 
         mockMvc.perform(get("/api/environments/env-123")
-                        .header("X-User-Id", "user-002"))
+                        .header("X-User-Id", "user-002")
+                        .header("X-User-Role", "ROLE_USER"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.error")
-                        .value("ACCESS_DENIED"));
+                .andExpect(jsonPath("$.error").value("ACCESS_DENIED"));
     }
 
     @Test
     void shouldGetMyEnvironments() throws Exception {
-
         when(environmentService.getEnvironmentsByUserId("user-001"))
                 .thenReturn(List.of(createResponse()));
 
         mockMvc.perform(get("/api/environments/my")
                         .header("X-User-Id", "user-001"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].userId")
-                        .value("user-001"));
+                .andExpect(jsonPath("$[0].userId").value("user-001"));
     }
 
     @Test
     void shouldDeleteEnvironment() throws Exception {
-
         EnvironmentResponse response = createResponse();
         response.setStatus(EnvironmentStatus.DELETING);
 
         when(environmentService.deleteEnvironment(
                 "env-123",
-                "user-001"
+                "user-001",
+                "ROLE_USER"
         )).thenReturn(response);
 
         mockMvc.perform(delete("/api/environments/env-123")
-                        .header("X-User-Id", "user-001"))
+                        .header("X-User-Id", "user-001")
+                        .header("X-User-Role", "ROLE_USER"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status")
-                        .value("DELETING"));
+                .andExpect(jsonPath("$.status").value("DELETING"));
     }
 
     @Test
     void shouldExtendEnvironment() throws Exception {
-
         EnvironmentResponse response = createResponse();
         response.setStatus(EnvironmentStatus.READY);
 
         when(environmentService.extendEnvironment(
+                anyString(),
                 anyString(),
                 anyString(),
                 anyInt()
@@ -206,6 +200,7 @@ public class EnvironmentControllerTest {
 
         mockMvc.perform(patch("/api/environments/env-123/extend")
                         .header("X-User-Id", "user-001")
+                        .header("X-User-Role", "ROLE_USER")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -213,7 +208,6 @@ public class EnvironmentControllerTest {
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status")
-                        .value("READY"));
+                .andExpect(jsonPath("$.status").value("READY"));
     }
 }
