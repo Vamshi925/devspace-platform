@@ -42,42 +42,53 @@ public class EnvironmentController {
         }
 
         // Get Environment By ID
-        @GetMapping("/{environmentId}")
-public ResponseEntity<EnvironmentResponse> getEnvironmentById(
-        @PathVariable String environmentId,
-        @RequestHeader("X-User-Id") String userId) {
+ @GetMapping("/{environmentId}")
+public ResponseEntity<EnvironmentResponse>
+        getEnvironmentById(
+                @PathVariable String environmentId,
+                @RequestHeader("X-User-Id") String userId,
+                @RequestHeader("X-User-Role") String role) {
 
-    EnvironmentResponse environment =
-            environmentService.getEnvironmentById(environmentId, userId);
+    EnvironmentResponse response =
+            environmentService.getEnvironmentById(
+                    environmentId,
+                    userId,
+                    role
+            );
 
-    return ResponseEntity.ok(environment);
+    return ResponseEntity.ok(
+            response
+    );
 }
 
-        @DeleteMapping("/{environmentId}")
+@DeleteMapping("/{environmentId}")
 public ResponseEntity<EnvironmentResponse> deleteEnvironment(
         @PathVariable String environmentId,
-        @RequestHeader("X-User-Id") String userId) {
+        @RequestHeader("X-User-Id") String userId,
+        @RequestHeader("X-User-Role") String role) {
 
-    EnvironmentResponse environment =
-            environmentService.deleteEnvironment(environmentId, userId);
-
-    return ResponseEntity.ok(environment);
+    return ResponseEntity.ok(
+            environmentService.deleteEnvironment(
+                    environmentId,
+                    userId,
+                    role
+            )
+    );
 }
 
 @PatchMapping("/{environmentId}/extend")
 public ResponseEntity<EnvironmentResponse> extendEnvironment(
         @PathVariable String environmentId,
         @RequestHeader("X-User-Id") String userId,
-        @Valid @RequestBody ExtendEnvironmentRequest request) {
+        @RequestParam Integer additionalHours) {
 
-    EnvironmentResponse environment =
+    return ResponseEntity.ok(
             environmentService.extendEnvironment(
                     environmentId,
                     userId,
-                    request.getAdditionalHours()
-            );
-
-    return ResponseEntity.ok(environment);
+                    additionalHours
+            )
+    );
 }
 
 
