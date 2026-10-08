@@ -1,5 +1,7 @@
 package com.devspace.notification.service;
 
+import com.devspace.notification.exception.NotificationAccessDeniedException;
+import com.devspace.notification.exception.NotificationNotFoundException;
 import com.devspace.notification.dto.request.CreateNotificationRequest;
 import com.devspace.notification.dto.response.NotificationResponse;
 import com.devspace.notification.model.Notification;
@@ -52,13 +54,13 @@ public class NotificationService {
         Notification notification = notificationRepository
                 .findById(notificationId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new NotificationNotFoundException(
                                 "Notification not found"
                         )
                 );
 
         if (!notification.getUserId().equals(userId)) {
-            throw new IllegalArgumentException(
+            throw new NotificationAccessDeniedException(
                     "You are not allowed to access this notification"
             );
         }
