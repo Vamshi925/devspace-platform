@@ -18,6 +18,9 @@ public class TemplateServiceClient {
 
     private final RestClient restClient;
 
+    @Value("${devspace.internal.api-key}")
+    private String internalApiKey;
+
     public TemplateServiceClient(
             @Value("${devspace.services.template.url}") String templateServiceUrl) {
 
@@ -33,6 +36,10 @@ public class TemplateServiceClient {
         return restClient.get()
                 .uri("/api/templates/{templateId}", templateId)
                 .retrieve()
+                .header(
+                        "X-Internal-Api-Key",
+                        internalApiKey
+                )
                 .body(TemplateResponse.class);
 
     } catch (org.springframework.web.client.HttpClientErrorException.NotFound ex) {

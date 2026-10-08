@@ -11,6 +11,9 @@ public class EnvironmentServiceClient {
 
     private final RestClient restClient;
 
+    @Value("${devspace.internal.api-key}")
+    private String internalApiKey;  
+
     public EnvironmentServiceClient(
             @Value("${devspace.services.environment.url}") String environmentServiceUrl) {
 
@@ -27,6 +30,10 @@ public class EnvironmentServiceClient {
                 .uri(
                         "/internal/environments/{environmentId}/provisioning-status",
                         environmentId
+                )
+                .header(
+                        "X-Internal-Api-Key",
+                        internalApiKey
                 )
                 .body(request)
                 .retrieve()

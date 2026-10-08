@@ -1,5 +1,7 @@
 package com.devspace.gateway.security;
 
+import org.springframework.beans.factory.annotation.Value;
+
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 
@@ -22,6 +24,9 @@ public class JwtAuthenticationFilter
 
     private final JwtService jwtService;
 
+    @Value("${devspace.gateway.internal-key}")
+    private String gatewayInternalKey;
+
     public JwtAuthenticationFilter(
             JwtService jwtService) {
 
@@ -43,37 +48,53 @@ public class JwtAuthenticationFilter
                 exchange.getRequest()
                         .getMethod();
 
-        // Public APIs
+        // Public endpoints
         if (isPublicEndpoint(path)) {
 
-            return chain.filter(exchange);
+            return chain.filter(
+                    exchange
+            );
         }
 
         String authHeader =
                 exchange.getRequest()
                         .getHeaders()
-                        .getFirst("Authorization");
+                        .getFirst(
+                                "Authorization"
+                        );
 
         if (authHeader == null
                 ||
-                !authHeader.startsWith("Bearer ")) {
+                !authHeader.startsWith(
+                        "Bearer "
+                )) {
 
-            return unauthorized(exchange);
+            return unauthorized(
+                    exchange
+            );
         }
 
         String token =
                 authHeader.substring(7);
 
-        if (!jwtService.isTokenValid(token)) {
+        if (!jwtService.isTokenValid(
+                token
+        )) {
 
-            return unauthorized(exchange);
+            return unauthorized(
+                    exchange
+            );
         }
 
         String userId =
-                jwtService.extractUserId(token);
+                jwtService.extractUserId(
+                        token
+                );
 
         String role =
-                jwtService.extractRole(token);
+                jwtService.extractRole(
+                        token
+                );
 
         if (userId == null
                 ||
@@ -83,22 +104,31 @@ public class JwtAuthenticationFilter
                 ||
                 role.isBlank()) {
 
-            return unauthorized(exchange);
+            return unauthorized(
+                    exchange
+            );
         }
 
         // ----------------------------
         // Authorization
         // ----------------------------
 
-        if (requiresAdmin(path, method)
+        if (requiresAdmin(
+                path,
+                method
+        )
                 &&
-                !"ROLE_ADMIN".equals(role)) {
+                !"ROLE_ADMIN".equals(
+                        role
+                )) {
 
-            return forbidden(exchange);
+            return forbidden(
+                    exchange
+            );
         }
 
         // ----------------------------
-        // Trusted identity headers
+        // Trusted headers
         // ----------------------------
 
         ServerHttpRequest request =
@@ -106,10 +136,19 @@ public class JwtAuthenticationFilter
                         .mutate()
                         .headers(headers -> {
 
-                            // Remove anything supplied
-                            // by the client
-                            headers.remove("X-User-Id");
-                            headers.remove("X-User-Role");
+                            // Never trust identity/security
+                            // headers supplied by client
+                            headers.remove(
+                                    "X-User-Id"
+                            );
+
+                            headers.remove(
+                                    "X-User-Role"
+                            );
+
+                            headers.remove(
+                                    "X-DevSpace-Gateway-Key"
+                            );
                         })
                         .header(
                                 "X-User-Id",
@@ -119,11 +158,17 @@ public class JwtAuthenticationFilter
                                 "X-User-Role",
                                 role
                         )
+                        .header(
+                                "X-DevSpace-Gateway-Key",
+                                gatewayInternalKey
+                        )
                         .build();
 
         ServerWebExchange mutatedExchange =
                 exchange.mutate()
-                        .request(request)
+                        .request(
+                                request
+                        )
                         .build();
 
         return chain.filter(
@@ -151,26 +196,32 @@ public class JwtAuthenticationFilter
             String path,
             HttpMethod method) {
 
-        
-         if (path.startsWith(
-            "/api/admin/")) {
+        // Admin user-management APIs
+        if (path.startsWith(
+                "/api/admin/")) {
 
-        return true;
-    }
+            return true;
+        }
 
-        // Only admins can view every environment
-        if (path.equals("/api/environments")
+        // Only admins can list
+        // every environment
+        if (path.equals(
+                "/api/environments"
+        )
                 &&
                 method == HttpMethod.GET) {
 
             return true;
         }
 
-        // Template reads are allowed
-        // for normal authenticated users.
+        // Template reads:
+        // USER + ADMIN
         //
-        // Template modification is admin-only.
-        if (path.startsWith("/api/templates")) {
+        // Template modifications:
+        // ADMIN only
+        if (path.startsWith(
+                "/api/templates"
+        )) {
 
             return method == HttpMethod.POST
                     ||

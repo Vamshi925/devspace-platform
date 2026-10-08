@@ -3,6 +3,7 @@ package com.devspace.environment.client;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -16,6 +17,9 @@ import com.devspace.environment.exception.ProvisioningServiceUnavailableExceptio
 public class ProvisioningServiceClient {
 
     private final RestClient restClient;
+
+    @Value("${devspace.internal.api-key}")
+    private String internalApiKey;
 
     public ProvisioningServiceClient(
             @Value("${devspace.services.provisioning.url}")
@@ -34,6 +38,10 @@ public class ProvisioningServiceClient {
             return restClient
                     .post()
                     .uri("/api/provisioning")
+                    .header(
+                        "X-Internal-Api-Key",
+                        internalApiKey
+                    )
                     .body(request)
                     .retrieve()
                     .body(ProvisioningResponse.class);
@@ -60,6 +68,10 @@ public class ProvisioningServiceClient {
             return restClient
                     .method(HttpMethod.DELETE)
                     .uri("/api/provisioning")
+                    .header(
+                        "X-Internal-Api-Key",
+                        internalApiKey
+                    )
                     .body(request)
                     .retrieve()
                     .body(ProvisioningResponse.class);
