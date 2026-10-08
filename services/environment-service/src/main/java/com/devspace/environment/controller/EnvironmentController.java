@@ -81,14 +81,14 @@ public ResponseEntity<EnvironmentResponse> extendEnvironment(
         @PathVariable String environmentId,
         @RequestHeader("X-User-Id") String userId,
         @RequestHeader("X-User-Role") String role,
-        @RequestParam Integer additionalHours) {
+        @Valid @RequestBody ExtendEnvironmentRequest request) {
 
     return ResponseEntity.ok(
             environmentService.extendEnvironment(
                     environmentId,
                     userId,
                     role,
-                    additionalHours
+                    request.getAdditionalHours()
             )
     );
 }
