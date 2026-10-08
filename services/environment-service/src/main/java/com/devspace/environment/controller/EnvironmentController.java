@@ -80,12 +80,14 @@ public ResponseEntity<EnvironmentResponse> deleteEnvironment(
 public ResponseEntity<EnvironmentResponse> extendEnvironment(
         @PathVariable String environmentId,
         @RequestHeader("X-User-Id") String userId,
+        @RequestHeader("X-User-Role") String role,
         @RequestParam Integer additionalHours) {
 
     return ResponseEntity.ok(
             environmentService.extendEnvironment(
                     environmentId,
                     userId,
+                    role,
                     additionalHours
             )
     );
