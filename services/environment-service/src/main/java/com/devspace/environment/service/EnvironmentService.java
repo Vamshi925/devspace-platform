@@ -649,7 +649,7 @@ public class EnvironmentService {
         }
     }
 
-    public void checkExpiringEnvironment(String environmentId) {
+  public void checkExpiringEnvironment(String environmentId) {
     Environment env = getEnvironment(environmentId);
 
     if (env.getStatus() != EnvironmentStatus.READY
@@ -660,10 +660,10 @@ public class EnvironmentService {
     Instant now = Instant.now();
 
     if (env.getExpiresAt().isAfter(now)
-            && !env.getExpiresAt().isAfter(
-                    now.plus(30, ChronoUnit.MINUTES))) {
+            && !env.getExpiresAt()
+                    .isAfter(now.plus(30, ChronoUnit.MINUTES))) {
 
-        notify(
+        sendNotification(
                 env,
                 "ENVIRONMENT_EXPIRING",
                 "Environment Expiring Soon",
