@@ -649,6 +649,33 @@ public class EnvironmentService {
         }
     }
 
+    public void checkExpiringEnvironment(String environmentId) {
+    Environment env = getEnvironment(environmentId);
+
+    if (env.getStatus() != EnvironmentStatus.READY
+            || env.isExpirationNotificationSent()) {
+        return;
+    }
+
+    Instant now = Instant.now();
+
+    if (env.getExpiresAt().isAfter(now)
+            && !env.getExpiresAt().isAfter(
+                    now.plus(30, ChronoUnit.MINUTES))) {
+
+        notify(
+                env,
+                "ENVIRONMENT_EXPIRING",
+                "Environment Expiring Soon",
+                "Environment " + env.getApplicationName()
+                        + " will expire within 30 minutes."
+        );
+
+        env.setExpirationNotificationSent(true);
+        environmentRepository.save(env);
+    }
+}
+
     private Environment convertToEntity(
             CreateEnvironmentRequest request) {
 

@@ -27,6 +27,8 @@ public interface EnvironmentRepository extends JpaRepository<Environment, String
     @Query("SELECT e FROM Environment e WHERE e.environmentCode = :environmentCode")
     Optional<Environment> findByEnvironmentCode(@Param("environmentCode") String environmentCode);
 
+    List<Environment> findByStatus(EnvironmentStatus status);
+    
     // Fetch expired environments based on status and expiry time
     @Query("""
            SELECT e

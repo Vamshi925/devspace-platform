@@ -72,4 +72,15 @@ public class EnvironmentExpirationScheduler {
             }
         }
     }
+
+@Scheduled(fixedDelay = 60000)
+public void checkExpiringEnvironments() {
+    environmentRepository
+            .findByStatus(EnvironmentStatus.READY)
+            .forEach(env ->
+                    environmentService.checkExpiringEnvironment(
+                            env.getEnvironmentId()
+                    )
+            );
+}
 }
