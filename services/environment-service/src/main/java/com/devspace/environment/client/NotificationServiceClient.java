@@ -32,6 +32,19 @@ public class NotificationServiceClient {
                 .toBodilessEntity();
     }
 
+    public long getUnreadCount(String userId) {
+    Long count = restClient.get()
+            .uri(
+                    "/internal/notifications/users/{userId}/unread-count",
+                    userId
+            )
+            .header("X-Internal-Api-Key", internalApiKey)
+            .retrieve()
+            .body(Long.class);
+
+    return count == null ? 0 : count;
+}
+
     public record NotificationRequest(
             String userId,
             String environmentId,

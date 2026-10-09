@@ -20,6 +20,7 @@ import com.devspace.environment.dto.response.EnvironmentActivityResponse;
 import com.devspace.environment.dto.response.EnvironmentResponse;
 import com.devspace.environment.dto.response.ProvisioningResponse;
 import com.devspace.environment.dto.response.TemplateResponse;
+import com.devspace.environment.dto.response.DashboardSummaryResponse;
 import com.devspace.environment.exception.EnvironmentAccessDeniedException;
 import com.devspace.environment.exception.EnvironmentNotFoundException;
 import com.devspace.environment.exception.ProvisioningServiceUnavailableException;
@@ -543,6 +544,38 @@ public class EnvironmentService {
                 + "-"
                 + UUID.randomUUID().toString().substring(0, 5);
     }
+
+    public DashboardSummaryResponse getDashboardSummary(
+        String userId,
+        String role) {
+
+    boolean admin = "ROLE_ADMIN".equals(role);
+
+    long total = admin
+            ? environmentRepository.count()
+            : environmentRepository.countByUserId(userId);
+
+    return new DashboardSummaryResponse(
+            total,
+            count(userId, role, EnvironmentStatus.READY),
+            count(userId, role, EnvironmentStatus.PROVISIONING),
+            count(userId, role, EnvironmentStatus.FAILED),
+            count(userId, role, EnvironmentStatus.EXPIRED),
+            count(userId, role, EnvironmentStatus.DELETED),
+            notificationServiceClient.getUnreadCount(userId)
+    );
+}
+
+private long count(
+        String userId,
+        String role,
+        EnvironmentStatus status) {
+
+    return "ROLE_ADMIN".equals(role)
+            ? environmentRepository.countByStatus(status)
+            : environmentRepository
+                    .countByUserIdAndStatus(userId, status);
+}
 
     private Environment convertToEntity(CreateEnvironmentRequest request) {
         Environment env = new Environment();

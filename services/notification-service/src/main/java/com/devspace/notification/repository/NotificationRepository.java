@@ -11,4 +11,6 @@ public interface NotificationRepository
     List<Notification> findByUserIdOrderByCreatedAtDesc(
             String userId
     );
+
+    long countByUserIdAndReadFalse(String userId);
 }

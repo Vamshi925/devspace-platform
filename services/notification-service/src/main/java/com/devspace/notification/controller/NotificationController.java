@@ -49,4 +49,13 @@ public class NotificationController {
                 )
         );
     }
+
+@GetMapping("/internal/notifications/users/{userId}/unread-count")
+public ResponseEntity<Long> getUnreadCount(
+        @PathVariable String userId) {
+
+    return ResponseEntity.ok(
+            notificationService.getUnreadCount(userId)
+    );
+}
 }

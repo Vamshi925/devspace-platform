@@ -93,4 +93,8 @@ public class NotificationService {
 
         return response;
     }
+
+    public long getUnreadCount(String userId) {
+    return notificationRepository.countByUserIdAndReadFalse(userId);
+}
 }

@@ -41,4 +41,13 @@ public interface EnvironmentRepository extends JpaRepository<Environment, String
             @Param("currentTime") Instant currentTime
     );
 
+long countByUserId(String userId);
+
+long countByUserIdAndStatus(
+        String userId,
+        EnvironmentStatus status
+);
+
+long countByStatus(EnvironmentStatus status);
+
 }
