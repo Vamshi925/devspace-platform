@@ -49,7 +49,8 @@ class EnvironmentControllerTest {
                 null,
                 "https://github.com/example/payment-service",
                 "main",
-                null
+                null,
+                "READY"
         );
     }
 
