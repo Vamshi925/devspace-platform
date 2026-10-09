@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -17,6 +16,7 @@ import com.devspace.environment.dto.request.CreateEnvironmentRequest;
 import com.devspace.environment.dto.request.DeprovisioningRequest;
 import com.devspace.environment.dto.request.ProvisioningRequest;
 import com.devspace.environment.dto.request.ProvisioningStatusRequest;
+import com.devspace.environment.dto.response.EnvironmentActivityResponse;
 import com.devspace.environment.dto.response.EnvironmentResponse;
 import com.devspace.environment.dto.response.ProvisioningResponse;
 import com.devspace.environment.dto.response.TemplateResponse;
@@ -24,7 +24,10 @@ import com.devspace.environment.exception.EnvironmentAccessDeniedException;
 import com.devspace.environment.exception.EnvironmentNotFoundException;
 import com.devspace.environment.exception.ProvisioningServiceUnavailableException;
 import com.devspace.environment.model.Environment;
+import com.devspace.environment.model.EnvironmentActivity;
+import com.devspace.environment.model.EnvironmentActivityType;
 import com.devspace.environment.model.EnvironmentStatus;
+import com.devspace.environment.repository.EnvironmentActivityRepository;
 import com.devspace.environment.repository.EnvironmentRepository;
 
 @Service
@@ -32,32 +35,26 @@ public class EnvironmentService {
 
     @Autowired
     private EnvironmentRepository environmentRepository;
-
+    @Autowired
+    private EnvironmentActivityRepository activityRepository;
     @Autowired
     private TemplateServiceClient templateServiceClient;
-
     @Autowired
     private ProvisioningServiceClient provisioningServiceClient;
-
     @Autowired
     private GitHubRepositoryClient gitHubRepositoryClient;
-
     @Autowired
     private NotificationServiceClient notificationServiceClient;
 
     public EnvironmentResponse createEnvironment(
-            CreateEnvironmentRequest request,
-            String userId) {
+            CreateEnvironmentRequest request, String userId) {
 
         validateLifetime(request.getLifetimeHours());
 
         TemplateResponse template =
-                templateServiceClient.getTemplateById(
-                        request.getTemplateId()
-                );
+                templateServiceClient.getTemplateById(request.getTemplateId());
 
-        if (template == null
-                || Boolean.FALSE.equals(template.getActive())) {
+        if (template == null || Boolean.FALSE.equals(template.getActive())) {
             throw new IllegalArgumentException(
                     "Selected template is not available"
             );
@@ -68,166 +65,92 @@ public class EnvironmentService {
                 request.getBranchName()
         );
 
-        Environment environment = convertToEntity(request);
-        environment.setUserId(userId);
-        environment.setEnvironmentCode(
-                generateEnvironmentCode(
-                        request.getApplicationName()
-                )
-        );
-        environment.setStatus(EnvironmentStatus.REQUESTED);
-        environment.setExpiresAt(
-                Instant.now().plus(
-                        request.getLifetimeHours(),
-                        ChronoUnit.HOURS
-                )
+        Environment env = convertToEntity(request);
+        env.setUserId(userId);
+        env.setEnvironmentCode(generateEnvironmentCode(request.getApplicationName()));
+        env.setStatus(EnvironmentStatus.REQUESTED);
+        env.setExpiresAt(
+                Instant.now().plus(request.getLifetimeHours(), ChronoUnit.HOURS)
         );
 
-        Environment savedEnvironment =
-                environmentRepository.save(environment);
+        env = environmentRepository.save(env);
+        recordActivity(env, EnvironmentActivityType.CREATED, "Environment created");
 
-        savedEnvironment.setStatus(
-                EnvironmentStatus.PROVISIONING
+        env.setStatus(EnvironmentStatus.PROVISIONING);
+        env.setFailureReason(null);
+        env = environmentRepository.save(env);
+
+        recordActivity(
+                env,
+                EnvironmentActivityType.PROVISIONING_STARTED,
+                "Environment provisioning started"
         );
-        savedEnvironment.setFailureReason(null);
 
-        savedEnvironment =
-                environmentRepository.save(savedEnvironment);
-
-        ProvisioningRequest provisioningRequest =
-                new ProvisioningRequest(
-                        savedEnvironment.getEnvironmentId(),
-                        savedEnvironment.getEnvironmentCode(),
-                        savedEnvironment.getApplicationName(),
-                        savedEnvironment.getTemplateId(),
-                        savedEnvironment.getExpiresAt(),
-                        savedEnvironment.getRepositoryUrl(),
-                        savedEnvironment.getBranchName(),
-                        template.getContainerImage(),
-                        template.getApplicationPort(),
-                        template.getCpuRequest(),
-                        template.getCpuLimit(),
-                        template.getMemoryRequest(),
-                        template.getMemoryLimit()
-                );
+        ProvisioningRequest provisioningRequest = new ProvisioningRequest(
+                env.getEnvironmentId(),
+                env.getEnvironmentCode(),
+                env.getApplicationName(),
+                env.getTemplateId(),
+                env.getExpiresAt(),
+                env.getRepositoryUrl(),
+                env.getBranchName(),
+                template.getContainerImage(),
+                template.getApplicationPort(),
+                template.getCpuRequest(),
+                template.getCpuLimit(),
+                template.getMemoryRequest(),
+                template.getMemoryLimit()
+        );
 
         try {
             ProvisioningResponse response =
-                    provisioningServiceClient
-                            .provisionEnvironment(
-                                    provisioningRequest
-                            );
+                    provisioningServiceClient.provisionEnvironment(provisioningRequest);
 
             if (response == null) {
-                savedEnvironment.setStatus(
-                        EnvironmentStatus.FAILED
-                );
-                savedEnvironment.setFailureReason(
+                env = markFailed(
+                        env,
                         "Provisioning Service returned an empty response"
                 );
-
-                savedEnvironment =
-                        environmentRepository.save(
-                                savedEnvironment
-                        );
-
-                sendFailedNotification(savedEnvironment);
-
-            } else if ("FAILED".equalsIgnoreCase(
-                    response.getStatus())) {
-
-                savedEnvironment.setStatus(
-                        EnvironmentStatus.FAILED
+            } else if ("FAILED".equalsIgnoreCase(response.getStatus())) {
+                env = markFailed(env, response.getMessage());
+            } else if (!"ACCEPTED".equalsIgnoreCase(response.getStatus())) {
+                env = markFailed(
+                        env,
+                        "Provisioning Service did not accept the provisioning request"
                 );
-                savedEnvironment.setFailureReason(
-                        response.getMessage()
-                );
-
-                savedEnvironment =
-                        environmentRepository.save(
-                                savedEnvironment
-                        );
-
-                sendFailedNotification(savedEnvironment);
-
-            } else if (!"ACCEPTED".equalsIgnoreCase(
-                    response.getStatus())) {
-
-                savedEnvironment.setStatus(
-                        EnvironmentStatus.FAILED
-                );
-                savedEnvironment.setFailureReason(
-                        "Provisioning Service did not accept "
-                                + "the provisioning request"
-                );
-
-                savedEnvironment =
-                        environmentRepository.save(
-                                savedEnvironment
-                        );
-
-                sendFailedNotification(savedEnvironment);
             }
-
         } catch (ProvisioningServiceUnavailableException ex) {
-            savedEnvironment.setStatus(
-                    EnvironmentStatus.FAILED
-            );
-            savedEnvironment.setFailureReason(
-                    ex.getMessage()
-            );
-
-            savedEnvironment =
-                    environmentRepository.save(
-                            savedEnvironment
-                    );
-
-            sendFailedNotification(savedEnvironment);
+            env = markFailed(env, ex.getMessage());
         }
 
-        Environment latestEnvironment =
-                environmentRepository
-                        .findById(
-                                savedEnvironment
-                                        .getEnvironmentId()
-                        )
-                        .orElse(savedEnvironment);
+        Environment latest = environmentRepository
+                .findById(env.getEnvironmentId())
+                .orElse(env);
 
-        return convertToDTO(latestEnvironment);
+        return convertToDTO(latest);
     }
 
     public EnvironmentResponse getEnvironmentById(
-            String environmentId,
-            String userId,
-            String role) {
+            String environmentId, String userId, String role) {
 
-        Environment environment =
-                getEnvironment(environmentId);
-
-        validateEnvironmentAccess(
-                environment,
-                userId,
-                role
-        );
-
-        return convertToDTO(environment);
+        Environment env = getEnvironment(environmentId);
+        validateEnvironmentAccess(env, userId, role);
+        return convertToDTO(env);
     }
 
     public List<EnvironmentResponse> getAllEnvironments() {
         return environmentRepository.findAll()
                 .stream()
                 .map(this::convertToDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
-    public List<EnvironmentResponse> getEnvironmentsByUserId(
-            String userId) {
-
+    public List<EnvironmentResponse> getEnvironmentsByUserId(String userId) {
         return environmentRepository
                 .findEnvironmentsByUserId(userId)
                 .stream()
                 .map(this::convertToDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public EnvironmentResponse extendEnvironment(
@@ -238,195 +161,182 @@ public class EnvironmentService {
 
         validateLifetime(additionalHours);
 
-        Environment environment =
-                getEnvironment(environmentId);
+        Environment env = getEnvironment(environmentId);
+        validateEnvironmentAccess(env, userId, role);
 
-        validateEnvironmentAccess(
-                environment,
-                userId,
-                role
-        );
-
-        if (environment.getStatus()
-                != EnvironmentStatus.READY) {
-
+        if (env.getStatus() != EnvironmentStatus.READY) {
             throw new IllegalArgumentException(
-                    "Environment can only be extended "
-                            + "while in READY status"
+                    "Environment can only be extended while in READY status"
             );
         }
 
-        environment.setExpiresAt(
-                environment.getExpiresAt()
-                        .plus(
-                                additionalHours,
-                                ChronoUnit.HOURS
-                        )
+        env.setExpiresAt(
+                env.getExpiresAt().plus(additionalHours, ChronoUnit.HOURS)
+        );
+        env.setExpirationNotificationSent(false);
+
+        env = environmentRepository.save(env);
+
+        recordActivity(
+                env,
+                EnvironmentActivityType.EXTENDED,
+                "Environment extended by " + additionalHours + " hours"
         );
 
-        return convertToDTO(
-                environmentRepository.save(environment)
-        );
+        return convertToDTO(env);
     }
 
     public EnvironmentResponse deleteEnvironment(
-            String environmentId,
-            String userId,
-            String role) {
+            String environmentId, String userId, String role) {
 
-        Environment environment =
-                getEnvironment(environmentId);
+        Environment env = getEnvironment(environmentId);
+        validateEnvironmentAccess(env, userId, role);
 
-        validateEnvironmentAccess(
-                environment,
-                userId,
-                role
-        );
-
-        if (environment.getStatus()
-                == EnvironmentStatus.DELETED) {
-
-            throw new IllegalArgumentException(
-                    "Environment is already deleted"
-            );
+        if (env.getStatus() == EnvironmentStatus.DELETED) {
+            throw new IllegalArgumentException("Environment is already deleted");
         }
 
-        if (environment.getStatus()
-                == EnvironmentStatus.DELETING) {
-
+        if (env.getStatus() == EnvironmentStatus.DELETING) {
             throw new IllegalArgumentException(
                     "Environment deletion is already in progress"
             );
         }
 
-        if (environment.getStatus()
-                == EnvironmentStatus.PROVISIONING) {
-
+        if (env.getStatus() == EnvironmentStatus.PROVISIONING) {
             throw new IllegalArgumentException(
-                    "Environment cannot be deleted while "
-                            + "provisioning is in progress"
+                    "Environment cannot be deleted while provisioning is in progress"
             );
         }
 
-        environment.setStatus(
-                EnvironmentStatus.DELETING
-        );
-        environment.setFailureReason(null);
+        env.setStatus(EnvironmentStatus.DELETING);
+        env.setFailureReason(null);
+        env = environmentRepository.save(env);
 
-        environment =
-                environmentRepository.save(environment);
+        recordActivity(
+                env,
+                EnvironmentActivityType.DELETION_REQUESTED,
+                "Environment deletion requested"
+        );
 
         DeprovisioningRequest request =
                 new DeprovisioningRequest(
-                        environment.getEnvironmentId(),
-                        environment.getEnvironmentCode()
+                        env.getEnvironmentId(),
+                        env.getEnvironmentCode()
                 );
 
         try {
             ProvisioningResponse response =
-                    provisioningServiceClient
-                            .deprovisionEnvironment(request);
+                    provisioningServiceClient.deprovisionEnvironment(request);
 
             if (response == null) {
-                environment.setFailureReason(
-                        "Provisioning Service returned "
-                                + "an empty response during cleanup"
+                env.setFailureReason(
+                        "Provisioning Service returned an empty response during cleanup"
                 );
-                environmentRepository.save(environment);
-
-            } else if ("FAILED".equalsIgnoreCase(
-                    response.getStatus())) {
-
-                environment.setFailureReason(
-                        response.getMessage()
-                );
-                environmentRepository.save(environment);
+                environmentRepository.save(env);
+            } else if ("FAILED".equalsIgnoreCase(response.getStatus())) {
+                env.setFailureReason(response.getMessage());
+                environmentRepository.save(env);
             }
-
         } catch (ProvisioningServiceUnavailableException ex) {
-            environment.setFailureReason(ex.getMessage());
-            environmentRepository.save(environment);
+            env.setFailureReason(ex.getMessage());
+            environmentRepository.save(env);
             throw ex;
         }
 
-        Environment latestEnvironment =
-                environmentRepository
-                        .findById(environmentId)
-                        .orElse(environment);
+        Environment latest =
+                environmentRepository.findById(environmentId).orElse(env);
 
-        return convertToDTO(latestEnvironment);
+        return convertToDTO(latest);
+    }
+
+    public void checkExpiringEnvironment(String environmentId) {
+        Environment env = getEnvironment(environmentId);
+
+        if (env.getStatus() != EnvironmentStatus.READY
+                || env.isExpirationNotificationSent()) {
+            return;
+        }
+
+        Instant now = Instant.now();
+
+        if (env.getExpiresAt().isAfter(now)
+                && !env.getExpiresAt()
+                        .isAfter(now.plus(30, ChronoUnit.MINUTES))) {
+
+            sendNotification(
+                    env,
+                    "ENVIRONMENT_EXPIRING",
+                    "Environment Expiring Soon",
+                    "Environment " + env.getApplicationName()
+                            + " will expire within 30 minutes."
+            );
+
+            env.setExpirationNotificationSent(true);
+            environmentRepository.save(env);
+
+            recordActivity(
+                    env,
+                    EnvironmentActivityType.EXPIRING,
+                    "Environment is expiring within 30 minutes"
+            );
+        }
     }
 
     public void expireEnvironment(String environmentId) {
+        Environment env = getEnvironment(environmentId);
 
-        Environment environment =
-                getEnvironment(environmentId);
-
-        if (environment.getStatus()
-                != EnvironmentStatus.READY
-                && environment.getStatus()
-                != EnvironmentStatus.EXPIRED) {
+        if (env.getStatus() != EnvironmentStatus.READY
+                && env.getStatus() != EnvironmentStatus.EXPIRED) {
             return;
         }
 
-        if (environment.getExpiresAt()
-                .isAfter(Instant.now())) {
+        if (env.getExpiresAt().isAfter(Instant.now())) {
             return;
         }
 
-        if (environment.getStatus()
-                == EnvironmentStatus.READY) {
+        if (env.getStatus() == EnvironmentStatus.READY) {
+            env.setStatus(EnvironmentStatus.EXPIRED);
+            env.setFailureReason(null);
+            env = environmentRepository.save(env);
 
-            environment.setStatus(
-                    EnvironmentStatus.EXPIRED
+            sendNotification(
+                    env,
+                    "ENVIRONMENT_EXPIRED",
+                    "Environment Expired",
+                    "Environment " + env.getApplicationName() + " has expired."
             );
-            environment.setFailureReason(null);
 
-            environment =
-                    environmentRepository.save(environment);
+            recordActivity(
+                    env,
+                    EnvironmentActivityType.EXPIRED,
+                    "Environment expired"
+            );
         }
 
-        environment.setStatus(
-                EnvironmentStatus.DELETING
-        );
-        environment.setFailureReason(null);
-
-        environment =
-                environmentRepository.save(environment);
+        env.setStatus(EnvironmentStatus.DELETING);
+        env.setFailureReason(null);
+        env = environmentRepository.save(env);
 
         DeprovisioningRequest request =
                 new DeprovisioningRequest(
-                        environment.getEnvironmentId(),
-                        environment.getEnvironmentCode()
+                        env.getEnvironmentId(),
+                        env.getEnvironmentCode()
                 );
 
         try {
             ProvisioningResponse response =
-                    provisioningServiceClient
-                            .deprovisionEnvironment(request);
+                    provisioningServiceClient.deprovisionEnvironment(request);
 
             if (response == null) {
                 markExpirationCleanupFailed(
-                        environment,
-                        "Provisioning Service returned "
-                                + "an empty response during "
-                                + "expiration cleanup"
+                        env,
+                        "Provisioning Service returned an empty response during expiration cleanup"
                 );
-
-            } else if ("FAILED".equalsIgnoreCase(
-                    response.getStatus())) {
-
-                markExpirationCleanupFailed(
-                        environment,
-                        response.getMessage()
-                );
+            } else if ("FAILED".equalsIgnoreCase(response.getStatus())) {
+                markExpirationCleanupFailed(env, response.getMessage());
             }
-
         } catch (ProvisioningServiceUnavailableException ex) {
-            markExpirationCleanupFailed(
-                    environment,
-                    ex.getMessage()
-            );
+            markExpirationCleanupFailed(env, ex.getMessage());
         }
     }
 
@@ -434,292 +344,233 @@ public class EnvironmentService {
             String environmentId,
             ProvisioningStatusRequest request) {
 
-        Environment environment =
-                getEnvironment(environmentId);
-
+        Environment env = getEnvironment(environmentId);
         String status = request.getStatus();
 
         if ("READY".equalsIgnoreCase(status)) {
-
-            if (environment.getStatus()
-                    != EnvironmentStatus.PROVISIONING) {
-
+            if (env.getStatus() != EnvironmentStatus.PROVISIONING) {
                 throw new IllegalArgumentException(
-                        "Environment must be in PROVISIONING "
-                                + "status before becoming READY"
+                        "Environment must be in PROVISIONING status before becoming READY"
                 );
             }
 
-            environment.setStatus(
-                    EnvironmentStatus.READY
-            );
-            environment.setNamespace(
-                    request.getNamespace()
-            );
-            environment.setApplicationUrl(
-                    request.getApplicationUrl()
-            );
-            environment.setFailureReason(null);
-
-            environment =
-                    environmentRepository.save(environment);
+            env.setStatus(EnvironmentStatus.READY);
+            env.setNamespace(request.getNamespace());
+            env.setApplicationUrl(request.getApplicationUrl());
+            env.setFailureReason(null);
+            env = environmentRepository.save(env);
 
             sendNotification(
-                    environment,
+                    env,
                     "ENVIRONMENT_READY",
                     "Environment Ready",
-                    "Your environment "
-                            + environment.getApplicationName()
-                            + " is ready."
+                    "Your environment " + env.getApplicationName() + " is ready."
+            );
+
+            recordActivity(
+                    env,
+                    EnvironmentActivityType.READY,
+                    "Environment is ready"
             );
 
         } else if ("FAILED".equalsIgnoreCase(status)) {
-
-            if (environment.getStatus()
-                    != EnvironmentStatus.PROVISIONING
-                    && environment.getStatus()
-                    != EnvironmentStatus.DELETING
-                    && environment.getStatus()
-                    != EnvironmentStatus.EXPIRED) {
+            if (env.getStatus() != EnvironmentStatus.PROVISIONING
+                    && env.getStatus() != EnvironmentStatus.DELETING
+                    && env.getStatus() != EnvironmentStatus.EXPIRED) {
 
                 throw new IllegalArgumentException(
-                        "Environment cannot be marked FAILED "
-                                + "from status: "
-                                + environment.getStatus()
+                        "Environment cannot be marked FAILED from status: "
+                                + env.getStatus()
                 );
             }
 
-            environment.setStatus(
-                    EnvironmentStatus.FAILED
-            );
-            environment.setFailureReason(
-                    request.getFailureReason()
-            );
-
-            environment =
-                    environmentRepository.save(environment);
-
-            sendFailedNotification(environment);
+            env = markFailed(env, request.getFailureReason());
 
         } else if ("DELETED".equalsIgnoreCase(status)) {
-
-            if (environment.getStatus()
-                    != EnvironmentStatus.DELETING
-                    && environment.getStatus()
-                    != EnvironmentStatus.EXPIRED) {
+            if (env.getStatus() != EnvironmentStatus.DELETING
+                    && env.getStatus() != EnvironmentStatus.EXPIRED) {
 
                 throw new IllegalArgumentException(
-                        "Environment cannot be marked DELETED "
-                                + "from status: "
-                                + environment.getStatus()
+                        "Environment cannot be marked DELETED from status: "
+                                + env.getStatus()
                 );
             }
 
-            environment.setStatus(
-                    EnvironmentStatus.DELETED
-            );
-            environment.setFailureReason(null);
-
-            environment =
-                    environmentRepository.save(environment);
+            env.setStatus(EnvironmentStatus.DELETED);
+            env.setFailureReason(null);
+            env = environmentRepository.save(env);
 
             sendNotification(
-                    environment,
+                    env,
                     "ENVIRONMENT_DELETED",
                     "Environment Deleted",
-                    "Environment "
-                            + environment.getApplicationName()
+                    "Environment " + env.getApplicationName()
                             + " has been deleted."
+            );
+
+            recordActivity(
+                    env,
+                    EnvironmentActivityType.DELETED,
+                    "Environment deleted"
             );
 
         } else {
             throw new IllegalArgumentException(
-                    "Unsupported provisioning status: "
-                            + status
+                    "Unsupported provisioning status: " + status
             );
         }
 
-        return convertToDTO(environment);
+        return convertToDTO(env);
     }
 
-    private Environment getEnvironment(
-            String environmentId) {
+    public List<EnvironmentActivityResponse> getEnvironmentActivity(
+            String environmentId, String userId, String role) {
 
-        return environmentRepository
-                .findById(environmentId)
-                .orElseThrow(() ->
-                        new EnvironmentNotFoundException(
-                                "Environment not found with id: "
-                                        + environmentId
-                        )
-                );
+        Environment env = getEnvironment(environmentId);
+        validateEnvironmentAccess(env, userId, role);
+
+        return activityRepository
+                .findByEnvironmentIdOrderByCreatedAtDesc(environmentId)
+                .stream()
+                .map(a -> new EnvironmentActivityResponse(
+                        a.getActivityId(),
+                        a.getEnvironmentId(),
+                        a.getType(),
+                        a.getMessage(),
+                        a.getCreatedAt()
+                ))
+                .toList();
     }
 
-    private void validateEnvironmentAccess(
-            Environment environment,
-            String userId,
-            String role) {
-
-        if ("ROLE_ADMIN".equals(role)) {
-            return;
-        }
-
-        if (!environment.getUserId().equals(userId)) {
-            throw new EnvironmentAccessDeniedException(
-                    "You are not allowed to access "
-                            + "this environment"
-            );
-        }
-    }
-
-    private void markExpirationCleanupFailed(
-            Environment environment,
-            String failureReason) {
-
-        environment.setStatus(
-                EnvironmentStatus.EXPIRED
-        );
-        environment.setFailureReason(failureReason);
-
-        environmentRepository.save(environment);
-    }
-
-    private void validateLifetime(
-            Integer lifetimeHours) {
-
-        if (!List.of(2, 4, 8, 24)
-                .contains(lifetimeHours)) {
-
-            throw new IllegalArgumentException(
-                    "Lifetime must be one of: "
-                            + "2, 4, 8, 24 hours"
-            );
-        }
-    }
-
-    private String generateEnvironmentCode(
-            String applicationName) {
-
-        return applicationName
-                .toLowerCase()
-                .replace(" ", "-")
-                + "-"
-                + UUID.randomUUID()
-                        .toString()
-                        .substring(0, 5);
-    }
-
-    private void sendFailedNotification(
-            Environment environment) {
+    private Environment markFailed(Environment env, String reason) {
+        env.setStatus(EnvironmentStatus.FAILED);
+        env.setFailureReason(reason);
+        env = environmentRepository.save(env);
 
         sendNotification(
-                environment,
+                env,
                 "ENVIRONMENT_FAILED",
                 "Environment Failed",
-                "Environment "
-                        + environment.getApplicationName()
-                        + " failed."
+                "Environment " + env.getApplicationName() + " failed."
         );
+
+        recordActivity(
+                env,
+                EnvironmentActivityType.FAILED,
+                "Environment failed: " + reason
+        );
+
+        return env;
+    }
+
+    private void recordActivity(
+            Environment env,
+            EnvironmentActivityType type,
+            String message) {
+
+        EnvironmentActivity activity = new EnvironmentActivity();
+        activity.setEnvironmentId(env.getEnvironmentId());
+        activity.setUserId(env.getUserId());
+        activity.setType(type);
+        activity.setMessage(message);
+
+        activityRepository.save(activity);
     }
 
     private void sendNotification(
-            Environment environment,
+            Environment env,
             String type,
             String title,
             String message) {
 
         try {
             notificationServiceClient.sendNotification(
-                    new NotificationServiceClient
-                            .NotificationRequest(
-                                    environment.getUserId(),
-                                    environment.getEnvironmentId(),
-                                    type,
-                                    title,
-                                    message
-                            )
+                    new NotificationServiceClient.NotificationRequest(
+                            env.getUserId(),
+                            env.getEnvironmentId(),
+                            type,
+                            title,
+                            message
+                    )
             );
+        } catch (Exception ignored) {
+        }
+    }
 
-        } catch (Exception ex) {
-            System.out.println(
-                    "Notification Service unavailable "
-                            + "for environment: "
-                            + environment.getEnvironmentId()
+    private Environment getEnvironment(String environmentId) {
+        return environmentRepository.findById(environmentId)
+                .orElseThrow(() ->
+                        new EnvironmentNotFoundException(
+                                "Environment not found with id: " + environmentId
+                        )
+                );
+    }
+
+    private void validateEnvironmentAccess(
+            Environment env,
+            String userId,
+            String role) {
+
+        if ("ROLE_ADMIN".equals(role)) return;
+
+        if (!env.getUserId().equals(userId)) {
+            throw new EnvironmentAccessDeniedException(
+                    "You are not allowed to access this environment"
             );
         }
     }
 
-  public void checkExpiringEnvironment(String environmentId) {
-    Environment env = getEnvironment(environmentId);
+    private void markExpirationCleanupFailed(
+            Environment env,
+            String reason) {
 
-    if (env.getStatus() != EnvironmentStatus.READY
-            || env.isExpirationNotificationSent()) {
-        return;
-    }
-
-    Instant now = Instant.now();
-
-    if (env.getExpiresAt().isAfter(now)
-            && !env.getExpiresAt()
-                    .isAfter(now.plus(30, ChronoUnit.MINUTES))) {
-
-        sendNotification(
-                env,
-                "ENVIRONMENT_EXPIRING",
-                "Environment Expiring Soon",
-                "Environment " + env.getApplicationName()
-                        + " will expire within 30 minutes."
-        );
-
-        env.setExpirationNotificationSent(true);
+        env.setStatus(EnvironmentStatus.EXPIRED);
+        env.setFailureReason(reason);
         environmentRepository.save(env);
     }
-}
 
-    private Environment convertToEntity(
-            CreateEnvironmentRequest request) {
-
-        Environment environment =
-                new Environment();
-
-        environment.setApplicationName(
-                request.getApplicationName()
-        );
-        environment.setTemplateId(
-                request.getTemplateId()
-        );
-        environment.setEnvironmentType(
-                request.getEnvironmentType()
-        );
-        environment.setRepositoryUrl(
-                request.getRepositoryUrl()
-        );
-        environment.setBranchName(
-                request.getBranchName()
-        );
-
-        return environment;
+    private void validateLifetime(Integer hours) {
+        if (!List.of(2, 4, 8, 24).contains(hours)) {
+            throw new IllegalArgumentException(
+                    "Lifetime must be one of: 2, 4, 8, 24 hours"
+            );
+        }
     }
 
-    private EnvironmentResponse convertToDTO(
-            Environment environment) {
+    private String generateEnvironmentCode(String applicationName) {
+        return applicationName.toLowerCase()
+                .replace(" ", "-")
+                + "-"
+                + UUID.randomUUID().toString().substring(0, 5);
+    }
 
+    private Environment convertToEntity(CreateEnvironmentRequest request) {
+        Environment env = new Environment();
+        env.setApplicationName(request.getApplicationName());
+        env.setTemplateId(request.getTemplateId());
+        env.setEnvironmentType(request.getEnvironmentType());
+        env.setRepositoryUrl(request.getRepositoryUrl());
+        env.setBranchName(request.getBranchName());
+        return env;
+    }
+
+    private EnvironmentResponse convertToDTO(Environment env) {
         return new EnvironmentResponse(
-                environment.getEnvironmentId(),
-                environment.getEnvironmentCode(),
-                environment.getApplicationName(),
-                environment.getUserId(),
-                environment.getTemplateId(),
-                environment.getEnvironmentType(),
-                environment.getStatus(),
-                environment.getCreatedAt(),
-                environment.getUpdatedAt(),
-                environment.getExpiresAt(),
-                environment.getNamespace(),
-                environment.getApplicationUrl(),
-                environment.getRepositoryUrl(),
-                environment.getBranchName(),
-                environment.getFailureReason()
+                env.getEnvironmentId(),
+                env.getEnvironmentCode(),
+                env.getApplicationName(),
+                env.getUserId(),
+                env.getTemplateId(),
+                env.getEnvironmentType(),
+                env.getStatus(),
+                env.getCreatedAt(),
+                env.getUpdatedAt(),
+                env.getExpiresAt(),
+                env.getNamespace(),
+                env.getApplicationUrl(),
+                env.getRepositoryUrl(),
+                env.getBranchName(),
+                env.getFailureReason()
         );
     }
 }

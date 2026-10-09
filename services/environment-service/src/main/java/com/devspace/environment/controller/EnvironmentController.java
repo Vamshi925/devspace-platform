@@ -11,6 +11,7 @@ import com.devspace.environment.dto.request.CreateEnvironmentRequest;
 import com.devspace.environment.dto.response.EnvironmentResponse;
 import com.devspace.environment.service.EnvironmentService;
 import com.devspace.environment.dto.request.ExtendEnvironmentRequest;
+import com.devspace.environment.dto.response.EnvironmentActivityResponse;
 
 import jakarta.validation.Valid;
 
@@ -103,4 +104,19 @@ public ResponseEntity<EnvironmentResponse> extendEnvironment(
 
                 return ResponseEntity.ok(environments);
         }
+
+@GetMapping("/{environmentId}/activity")
+public ResponseEntity<List<EnvironmentActivityResponse>> getActivity(
+        @PathVariable String environmentId,
+        @RequestHeader("X-User-Id") String userId,
+        @RequestHeader("X-User-Role") String role) {
+
+    return ResponseEntity.ok(
+            environmentService.getEnvironmentActivity(
+                    environmentId,
+                    userId,
+                    role
+            )
+    );
+}
 }
