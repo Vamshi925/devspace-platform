@@ -1,150 +1,110 @@
 package com.devspace.provisioning.service;
 
-import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 
 import com.devspace.provisioning.dto.request.ProvisioningRequest;
+import com.devspace.provisioning.kubernetes.ConfigMapProvisioner;
+import com.devspace.provisioning.kubernetes.DeploymentProvisioner;
+import com.devspace.provisioning.kubernetes.DeploymentReadinessChecker;
+import com.devspace.provisioning.kubernetes.IngressProvisioner;
 import com.devspace.provisioning.kubernetes.NamespaceProvisioner;
 import com.devspace.provisioning.kubernetes.ResourceQuotaProvisioner;
-import com.devspace.provisioning.kubernetes.DeploymentProvisioner;
-import com.devspace.provisioning.kubernetes.ServiceProvisioner;
-import com.devspace.provisioning.kubernetes.IngressProvisioner;
-import com.devspace.provisioning.kubernetes.DeploymentReadinessChecker;
-import com.devspace.provisioning.kubernetes.ConfigMapProvisioner;
 import com.devspace.provisioning.kubernetes.SecretProvisioner;
+import com.devspace.provisioning.kubernetes.ServiceProvisioner;
 
 @Service
 public class ProvisioningOrchestrator {
 
     private static final Logger logger =
-        LoggerFactory.getLogger(
-                ProvisioningOrchestrator.class
-        );
+            LoggerFactory.getLogger(ProvisioningOrchestrator.class);
 
     private final NamespaceProvisioner namespaceProvisioner;
     private final ResourceQuotaProvisioner resourceQuotaProvisioner;
+    private final ConfigMapProvisioner configMapProvisioner;
+    private final SecretProvisioner secretProvisioner;
     private final DeploymentProvisioner deploymentProvisioner;
     private final ServiceProvisioner serviceProvisioner;
     private final IngressProvisioner ingressProvisioner;
-    private final DeploymentReadinessChecker deploymentReadinessChecker;
-    private final ConfigMapProvisioner configMapProvisioner;
-    private final SecretProvisioner secretProvisioner;
+    private final DeploymentReadinessChecker readinessChecker;
+    private final ProvisioningProgressReporter progressReporter;
 
     public ProvisioningOrchestrator(
-        NamespaceProvisioner namespaceProvisioner,
-        ResourceQuotaProvisioner resourceQuotaProvisioner,
-        ConfigMapProvisioner configMapProvisioner,
-        SecretProvisioner secretProvisioner,
-        DeploymentProvisioner deploymentProvisioner,
-        ServiceProvisioner serviceProvisioner,
-        IngressProvisioner ingressProvisioner,
-        DeploymentReadinessChecker deploymentReadinessChecker) {
+            NamespaceProvisioner namespaceProvisioner,
+            ResourceQuotaProvisioner resourceQuotaProvisioner,
+            ConfigMapProvisioner configMapProvisioner,
+            SecretProvisioner secretProvisioner,
+            DeploymentProvisioner deploymentProvisioner,
+            ServiceProvisioner serviceProvisioner,
+            IngressProvisioner ingressProvisioner,
+            DeploymentReadinessChecker readinessChecker,
+            ProvisioningProgressReporter progressReporter) {
 
-    this.namespaceProvisioner =
-            namespaceProvisioner;
+        this.namespaceProvisioner = namespaceProvisioner;
+        this.resourceQuotaProvisioner = resourceQuotaProvisioner;
+        this.configMapProvisioner = configMapProvisioner;
+        this.secretProvisioner = secretProvisioner;
+        this.deploymentProvisioner = deploymentProvisioner;
+        this.serviceProvisioner = serviceProvisioner;
+        this.ingressProvisioner = ingressProvisioner;
+        this.readinessChecker = readinessChecker;
+        this.progressReporter = progressReporter;
+    }
 
-    this.resourceQuotaProvisioner =
-            resourceQuotaProvisioner;
+    public String provisionEnvironment(ProvisioningRequest request) {
 
-    this.configMapProvisioner =
-            configMapProvisioner;
+        String environmentId = request.getEnvironmentId();
 
-    this.deploymentProvisioner =
-            deploymentProvisioner;
+        logger.info("Step 1 - Creating namespace");
+        String namespace =
+                namespaceProvisioner.createNamespace(
+                        request.getEnvironmentCode()
+                );
 
-    this.secretProvisioner =
-            secretProvisioner;
+        report(environmentId, "NAMESPACE_CREATED");
 
-    this.serviceProvisioner =
-            serviceProvisioner;
+        logger.info("Step 2 - Configuring environment resources");
 
-    this.ingressProvisioner =
-            ingressProvisioner;
+        resourceQuotaProvisioner.createResourceQuota(namespace);
+        configMapProvisioner.createConfigMap(namespace, request);
+        secretProvisioner.createSecret(namespace, request);
 
-    this.deploymentReadinessChecker =
-            deploymentReadinessChecker;
-}
+        report(environmentId, "RESOURCES_CONFIGURED");
 
-    public String provisionEnvironment(
-        ProvisioningRequest request) {
+        logger.info("Step 3 - Creating Deployment");
+        deploymentProvisioner.createDeployment(namespace, request);
 
-    logger.info(
-            "Step 1 - Creating namespace"
-    );
+        report(environmentId, "DEPLOYMENT_CREATED");
 
-    String namespace =
-            namespaceProvisioner.createNamespace(
-                    request.getEnvironmentCode()
-            );
+        logger.info("Step 4 - Creating Service");
+        serviceProvisioner.createService(namespace, request);
 
-    logger.info(
-            "Step 2 - Creating ResourceQuota"
-    );
+        report(environmentId, "SERVICE_CREATED");
 
-    resourceQuotaProvisioner.createResourceQuota(
-            namespace
-    );
+        logger.info("Step 5 - Creating Ingress");
+        ingressProvisioner.createIngress(namespace, request);
 
-    logger.info(
-            "Step 3 - Creating ConfigMap"
-    );
+        report(environmentId, "INGRESS_CREATED");
 
-    configMapProvisioner.createConfigMap(
-            namespace,
-            request
-    );
+        logger.info("Step 6 - Waiting for Deployment readiness");
 
-    logger.info(
-            "Step 4 - Creating Secret"
-    );
+        report(environmentId, "WAITING_FOR_READINESS");
 
-    secretProvisioner.createSecret(
-            namespace,
-            request
-    );
+        readinessChecker.waitUntilReady(
+                namespace,
+                request.getEnvironmentCode()
+        );
 
-    logger.info(
-            "Step 5 - Creating Deployment"
-    );
+        logger.info(
+                "Provisioning completed successfully - EnvironmentId: {}",
+                environmentId
+        );
 
-    deploymentProvisioner.createDeployment(
-            namespace,
-            request
-    );
+        return namespace;
+    }
 
-    logger.info(
-            "Step 6 - Creating Service"
-    );
-
-    serviceProvisioner.createService(
-            namespace,
-            request
-    );
-
-    logger.info(
-            "Step 7 - Creating Ingress"
-    );
-
-    ingressProvisioner.createIngress(
-            namespace,
-            request
-    );
-
-    logger.info(
-            "Step 8 - Waiting for Deployment readiness"
-    );
-
-    deploymentReadinessChecker.waitUntilReady(
-            namespace,
-            request.getEnvironmentCode()
-    );
-
-    logger.info(
-            "Provisioning completed successfully - EnvironmentId: {}",
-            request.getEnvironmentId()
-    );
-
-    return namespace;
-}
+    private void report(String environmentId, String stage) {
+        progressReporter.report(environmentId, stage);
+    }
 }

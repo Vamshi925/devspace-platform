@@ -78,6 +78,7 @@ public class EnvironmentService {
         recordActivity(env, EnvironmentActivityType.CREATED, "Environment created");
 
         env.setStatus(EnvironmentStatus.PROVISIONING);
+        env.setProvisioningStage("STARTING");
         env.setFailureReason(null);
         env = environmentRepository.save(env);
 
@@ -342,87 +343,114 @@ public class EnvironmentService {
     }
 
     public EnvironmentResponse updateProvisioningStatus(
-            String environmentId,
-            ProvisioningStatusRequest request) {
+        String environmentId,
+        ProvisioningStatusRequest request) {
 
-        Environment env = getEnvironment(environmentId);
-        String status = request.getStatus();
+    Environment env = getEnvironment(environmentId);
+    String status = request.getStatus();
 
-        if ("READY".equalsIgnoreCase(status)) {
-            if (env.getStatus() != EnvironmentStatus.PROVISIONING) {
-                throw new IllegalArgumentException(
-                        "Environment must be in PROVISIONING status before becoming READY"
-                );
-            }
+    if ("PROVISIONING".equalsIgnoreCase(status)) {
 
-            env.setStatus(EnvironmentStatus.READY);
-            env.setNamespace(request.getNamespace());
-            env.setApplicationUrl(request.getApplicationUrl());
-            env.setFailureReason(null);
-            env = environmentRepository.save(env);
-
-            sendNotification(
-                    env,
-                    "ENVIRONMENT_READY",
-                    "Environment Ready",
-                    "Your environment " + env.getApplicationName() + " is ready."
-            );
-
-            recordActivity(
-                    env,
-                    EnvironmentActivityType.READY,
-                    "Environment is ready"
-            );
-
-        } else if ("FAILED".equalsIgnoreCase(status)) {
-            if (env.getStatus() != EnvironmentStatus.PROVISIONING
-                    && env.getStatus() != EnvironmentStatus.DELETING
-                    && env.getStatus() != EnvironmentStatus.EXPIRED) {
-
-                throw new IllegalArgumentException(
-                        "Environment cannot be marked FAILED from status: "
-                                + env.getStatus()
-                );
-            }
-
-            env = markFailed(env, request.getFailureReason());
-
-        } else if ("DELETED".equalsIgnoreCase(status)) {
-            if (env.getStatus() != EnvironmentStatus.DELETING
-                    && env.getStatus() != EnvironmentStatus.EXPIRED) {
-
-                throw new IllegalArgumentException(
-                        "Environment cannot be marked DELETED from status: "
-                                + env.getStatus()
-                );
-            }
-
-            env.setStatus(EnvironmentStatus.DELETED);
-            env.setFailureReason(null);
-            env = environmentRepository.save(env);
-
-            sendNotification(
-                    env,
-                    "ENVIRONMENT_DELETED",
-                    "Environment Deleted",
-                    "Environment " + env.getApplicationName()
-                            + " has been deleted."
-            );
-
-            recordActivity(
-                    env,
-                    EnvironmentActivityType.DELETED,
-                    "Environment deleted"
-            );
-
-        } else {
+        if (env.getStatus() != EnvironmentStatus.PROVISIONING) {
             throw new IllegalArgumentException(
-                    "Unsupported provisioning status: " + status
+                    "Environment is not currently provisioning"
             );
         }
 
-        return convertToDTO(env);
+        env.setProvisioningStage(request.getStage());
+        env = environmentRepository.save(env);
+
+    } else if ("READY".equalsIgnoreCase(status)) {
+
+        if (env.getStatus() != EnvironmentStatus.PROVISIONING) {
+            throw new IllegalArgumentException(
+                    "Environment must be in PROVISIONING status before becoming READY"
+            );
+        }
+
+        env.setStatus(EnvironmentStatus.READY);
+        env.setProvisioningStage("READY");
+        env.setNamespace(request.getNamespace());
+        env.setApplicationUrl(request.getApplicationUrl());
+        env.setFailureReason(null);
+
+        env = environmentRepository.save(env);
+
+        sendNotification(
+                env,
+                "ENVIRONMENT_READY",
+                "Environment Ready",
+                "Your environment "
+                        + env.getApplicationName()
+                        + " is ready."
+        );
+
+        recordActivity(
+                env,
+                EnvironmentActivityType.READY,
+                "Environment is ready"
+        );
+
+    } else if ("FAILED".equalsIgnoreCase(status)) {
+
+        if (env.getStatus() != EnvironmentStatus.PROVISIONING
+                && env.getStatus() != EnvironmentStatus.DELETING
+                && env.getStatus() != EnvironmentStatus.EXPIRED) {
+
+            throw new IllegalArgumentException(
+                    "Environment cannot be marked FAILED from status: "
+                            + env.getStatus()
+            );
+        }
+
+        if (request.getStage() != null) {
+            env.setProvisioningStage(request.getStage());
+        }
+
+        env = markFailed(
+                env,
+                request.getFailureReason()
+        );
+
+    } else if ("DELETED".equalsIgnoreCase(status)) {
+
+        if (env.getStatus() != EnvironmentStatus.DELETING
+                && env.getStatus() != EnvironmentStatus.EXPIRED) {
+
+            throw new IllegalArgumentException(
+                    "Environment cannot be marked DELETED from status: "
+                            + env.getStatus()
+            );
+        }
+
+        env.setStatus(EnvironmentStatus.DELETED);
+        env.setFailureReason(null);
+
+        env = environmentRepository.save(env);
+
+        sendNotification(
+                env,
+                "ENVIRONMENT_DELETED",
+                "Environment Deleted",
+                "Environment "
+                        + env.getApplicationName()
+                        + " has been deleted."
+        );
+
+        recordActivity(
+                env,
+                EnvironmentActivityType.DELETED,
+                "Environment deleted"
+        );
+
+    } else {
+        throw new IllegalArgumentException(
+                "Unsupported provisioning status: " + status
+        );
     }
+
+    return convertToDTO(env);
+}
 
     public List<EnvironmentActivityResponse> getEnvironmentActivity(
             String environmentId, String userId, String role) {
@@ -603,7 +631,8 @@ private long count(
                 env.getApplicationUrl(),
                 env.getRepositoryUrl(),
                 env.getBranchName(),
-                env.getFailureReason()
+                env.getFailureReason(),
+                env.getProvisioningStage()
         );
     }
 }

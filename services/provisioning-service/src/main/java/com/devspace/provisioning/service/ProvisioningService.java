@@ -64,6 +64,7 @@ public class ProvisioningService {
             ProvisioningStatusRequest statusRequest =
                     new ProvisioningStatusRequest(
                             "READY",
+                            "READY",
                             namespace,
                             applicationUrl,
                             null
@@ -91,6 +92,7 @@ public class ProvisioningService {
             ProvisioningStatusRequest statusRequest =
                     new ProvisioningStatusRequest(
                             "FAILED",
+                            null,
                             null,
                             null,
                             ex.getMessage()
@@ -158,6 +160,7 @@ public class ProvisioningService {
                             "DELETED",
                             null,
                             null,
+                            null,
                             null
                     );
 
@@ -183,6 +186,7 @@ public class ProvisioningService {
             ProvisioningStatusRequest statusRequest =
                     new ProvisioningStatusRequest(
                             "FAILED",
+                            null,
                             null,
                             null,
                             ex.getMessage()

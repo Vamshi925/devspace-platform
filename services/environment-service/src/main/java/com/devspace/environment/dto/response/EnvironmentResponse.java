@@ -43,4 +43,6 @@ public class EnvironmentResponse {
     private String branchName;
 
     private String failureReason;
+
+    private String provisioningStage;
 }

@@ -79,6 +79,8 @@ public class Environment {
     @Column(nullable = false)
     private boolean expirationNotificationSent = false;
 
+    private String provisioningStage;
+    
     @Version
     @Column(name = "version")
     private Long version;

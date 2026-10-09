@@ -11,6 +11,8 @@ public class ProvisioningStatusRequest {
 
     private String status;
 
+    private String stage;
+    
     private String namespace;
 
     private String applicationUrl;
