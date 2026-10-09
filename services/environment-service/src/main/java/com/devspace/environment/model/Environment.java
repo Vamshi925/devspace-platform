@@ -76,6 +76,9 @@ public class Environment {
     @Column(name = "failureReason", length = 2000)
     private String failureReason;
 
+    @Column(nullable = false)
+    private boolean expirationNotificationSent = false;
+
     @Version
     @Column(name = "version")
     private Long version;
