@@ -1,9 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  useNavigate,
-  useParams,
-} from "react-router-dom";
-
+import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Clock3,
@@ -28,43 +24,26 @@ import {
 import ConfirmModal from "../components/ConfirmModal";
 import Toast from "../components/Toast";
 import PageLoader from "../components/PageLoader";
+import ProvisioningProgress from "../components/ProvisioningProgress";
 
 function EnvironmentDetails() {
   const { environmentId } = useParams();
   const navigate = useNavigate();
 
-  const [environment, setEnvironment] =
-    useState(null);
+  const [environment, setEnvironment] = useState(null);
+  const [activity, setActivity] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [extendModalOpen, setExtendModalOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  const [activity, setActivity] =
-    useState([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
-  const [toast, setToast] =
-    useState(null);
-
-  const [deleteModalOpen, setDeleteModalOpen] =
-    useState(false);
-
-  const [extendModalOpen, setExtendModalOpen] =
-    useState(false);
-
-  const [actionLoading, setActionLoading] =
-    useState(false);
-
-  const loadDetails = async () => {
+  const loadDetails = async (showLoader = true) => {
     try {
-      setLoading(true);
+      if (showLoader) setLoading(true);
 
-      const [
-        environmentData,
-        activityData,
-      ] = await Promise.all([
+      const [environmentData, activityData] = await Promise.all([
         getEnvironmentById(environmentId),
         getEnvironmentActivity(environmentId),
       ]);
@@ -78,22 +57,32 @@ function EnvironmentDetails() {
           "Unable to load environment"
       );
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadDetails();
+    loadDetails(true);
   }, [environmentId]);
 
-  const showToast = (
-    type,
-    message
-  ) => {
-    setToast({
-      type,
-      message,
-    });
+  useEffect(() => {
+    if (!environment) return;
+
+    const shouldPoll = ["REQUESTED", "PROVISIONING"].includes(
+      environment.status
+    );
+
+    if (!shouldPoll) return;
+
+    const interval = setInterval(() => {
+      loadDetails(false);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [environment?.status, environmentId]);
+
+  const showToast = (type, message) => {
+    setToast({ type, message });
 
     setTimeout(() => {
       setToast(null);
@@ -104,10 +93,7 @@ function EnvironmentDetails() {
     try {
       setActionLoading(true);
 
-      await extendEnvironment(
-        environmentId,
-        2
-      );
+      await extendEnvironment(environmentId, 2);
 
       setExtendModalOpen(false);
 
@@ -116,7 +102,7 @@ function EnvironmentDetails() {
         "Environment extended successfully by 2 hours."
       );
 
-      await loadDetails();
+      await loadDetails(false);
     } catch (error) {
       showToast(
         "error",
@@ -132,9 +118,7 @@ function EnvironmentDetails() {
     try {
       setActionLoading(true);
 
-      await deleteEnvironment(
-        environmentId
-      );
+      await deleteEnvironment(environmentId);
 
       setDeleteModalOpen(false);
 
@@ -143,7 +127,7 @@ function EnvironmentDetails() {
         "Environment deletion started successfully."
       );
 
-      await loadDetails();
+      await loadDetails(false);
     } catch (error) {
       showToast(
         "error",
@@ -160,6 +144,7 @@ function EnvironmentDetails() {
       case "READY":
         return "status-ready";
 
+      case "REQUESTED":
       case "PROVISIONING":
         return "status-provisioning";
 
@@ -181,34 +166,27 @@ function EnvironmentDetails() {
   const getStatusIcon = (status) => {
     switch (status) {
       case "READY":
-        return (
-          <CircleCheckBig size={24} />
-        );
+        return <CircleCheckBig size={24} />;
 
+      case "REQUESTED":
       case "PROVISIONING":
-        return (
-          <LoaderCircle size={24} />
-        );
+        return <LoaderCircle size={24} />;
 
       case "FAILED":
-        return (
-          <CircleX size={24} />
-        );
+        return <CircleX size={24} />;
 
       default:
-        return (
-          <Server size={24} />
-        );
+        return <Server size={24} />;
     }
   };
 
   if (loading) {
-return (
-  <PageLoader
-    title="Loading environments..."
-    subtitle="Fetching your DevSpace environments"
-  />
-);
+    return (
+      <PageLoader
+        title="Loading environment..."
+        subtitle="Fetching environment details and lifecycle activity"
+      />
+    );
   }
 
   if (error) {
@@ -219,12 +197,9 @@ return (
     );
   }
 
-  if (!environment) {
-    return null;
-  }
+  if (!environment) return null;
 
-  const canExtend =
-    environment.status === "READY";
+  const canExtend = environment.status === "READY";
 
   const canDelete = ![
     "DELETED",
@@ -232,16 +207,20 @@ return (
     "PROVISIONING",
   ].includes(environment.status);
 
+  const showProvisioningProgress = [
+    "REQUESTED",
+    "PROVISIONING",
+    "READY",
+    "FAILED",
+  ].includes(environment.status);
+
   return (
     <>
       <button
         className="btn btn-ghost details-back"
-        onClick={() =>
-          navigate("/environments")
-        }
+        onClick={() => navigate("/environments")}
       >
         <ArrowLeft size={16} />
-
         Back to Environments
       </button>
 
@@ -252,17 +231,13 @@ return (
               environment.status
             )}`}
           >
-            {getStatusIcon(
-              environment.status
-            )}
+            {getStatusIcon(environment.status)}
           </div>
 
           <div>
             <div className="details-title-row">
               <h1 className="page-title">
-                {
-                  environment.applicationName
-                }
+                {environment.applicationName}
               </h1>
 
               <span
@@ -270,23 +245,16 @@ return (
                   environment.status
                 )}`}
               >
-                {
-                  environment.status
-                }
+                {environment.status}
               </span>
             </div>
 
             <p className="details-code">
-              {
-                environment.environmentCode
-              }
+              {environment.environmentCode}
             </p>
 
             <p className="page-subtitle">
-              Environment ID:{" "}
-              {
-                environment.environmentId
-              }
+              Environment ID: {environment.environmentId}
             </p>
           </div>
         </div>
@@ -295,12 +263,9 @@ return (
           {canExtend && (
             <button
               className="btn btn-secondary"
-              onClick={() =>
-                setExtendModalOpen(true)
-              }
+              onClick={() => setExtendModalOpen(true)}
             >
               <Clock3 size={16} />
-
               Extend 2 Hours
             </button>
           )}
@@ -308,39 +273,33 @@ return (
           {canDelete && (
             <button
               className="btn btn-danger"
-              onClick={() =>
-                setDeleteModalOpen(true)
-              }
+              onClick={() => setDeleteModalOpen(true)}
             >
               <Trash2 size={16} />
-
               Delete Environment
             </button>
           )}
         </div>
       </div>
 
+      {showProvisioningProgress && (
+        <ProvisioningProgress
+          stage={environment.provisioningStage || "STARTING"}
+          status={environment.status}
+        />
+      )}
+
       <div className="details-grid">
         <div className="glass-panel details-card">
           <div className="details-card-header">
             <Server size={18} />
-
-            <h3>
-              Environment
-            </h3>
+            <h3>Environment</h3>
           </div>
 
           <div className="details-info-grid">
             <div>
-              <span className="details-label">
-                Type
-              </span>
-
-              <strong>
-                {
-                  environment.environmentType
-                }
-              </strong>
+              <span className="details-label">Type</span>
+              <strong>{environment.environmentType}</strong>
             </div>
 
             <div>
@@ -349,35 +308,23 @@ return (
               </span>
 
               <strong>
-                {
-                  environment.provisioningStage ||
-                  "-"
-                }
+                {environment.provisioningStage || "-"}
               </strong>
             </div>
 
             <div>
-              <span className="details-label">
-                Namespace
-              </span>
+              <span className="details-label">Namespace</span>
 
               <strong>
-                {
-                  environment.namespace ||
-                  "Not assigned"
-                }
+                {environment.namespace || "Not assigned"}
               </strong>
             </div>
 
             <div>
-              <span className="details-label">
-                Template ID
-              </span>
+              <span className="details-label">Template ID</span>
 
               <strong className="details-small-value">
-                {
-                  environment.templateId
-                }
+                {environment.templateId}
               </strong>
             </div>
           </div>
@@ -386,10 +333,7 @@ return (
         <div className="glass-panel details-card">
           <div className="details-card-header">
             <Layers3 size={18} />
-
-            <h3>
-              Access
-            </h3>
+            <h3>Access</h3>
           </div>
 
           <div className="details-info-grid">
@@ -400,21 +344,16 @@ return (
 
               {environment.applicationUrl ? (
                 <a
-                  href={
-                    environment.applicationUrl
-                  }
+                  href={environment.applicationUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="details-link"
                 >
                   Open Environment
-
                   <ExternalLink size={14} />
                 </a>
               ) : (
-                <strong>
-                  Not available
-                </strong>
+                <strong>Not available</strong>
               )}
             </div>
 
@@ -424,9 +363,11 @@ return (
               </span>
 
               <strong>
-                {new Date(
-                  environment.expiresAt
-                ).toLocaleString()}
+                {environment.expiresAt
+                  ? new Date(
+                      environment.expiresAt
+                    ).toLocaleString()
+                  : "-"}
               </strong>
             </div>
 
@@ -436,9 +377,11 @@ return (
               </span>
 
               <strong>
-                {new Date(
-                  environment.createdAt
-                ).toLocaleString()}
+                {environment.createdAt
+                  ? new Date(
+                      environment.createdAt
+                    ).toLocaleString()
+                  : "-"}
               </strong>
             </div>
           </div>
@@ -447,49 +390,34 @@ return (
         <div className="glass-panel details-card">
           <div className="details-card-header">
             <GitBranch size={18} />
-
-            <h3>
-              Source Repository
-            </h3>
+            <h3>Source Repository</h3>
           </div>
 
           <div className="details-info-grid">
             <div>
-              <span className="details-label">
-                Repository
-              </span>
+              <span className="details-label">Repository</span>
 
               {environment.repositoryUrl ? (
                 <a
-                  href={
-                    environment.repositoryUrl
-                  }
+                  href={environment.repositoryUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="details-link"
                 >
                   Open Repository
-
                   <ExternalLink size={14} />
                 </a>
               ) : (
-                <strong>
-                  -
-                </strong>
+                <strong>-</strong>
               )}
             </div>
 
             <div>
-              <span className="details-label">
-                Branch
-              </span>
+              <span className="details-label">Branch</span>
 
               <strong className="details-inline">
                 <GitBranch size={14} />
-
-                {
-                  environment.branchName
-                }
+                {environment.branchName || "-"}
               </strong>
             </div>
           </div>
@@ -499,17 +427,10 @@ return (
           <div className="glass-panel details-card details-failure-card">
             <div className="details-card-header">
               <CircleX size={18} />
-
-              <h3>
-                Failure Information
-              </h3>
+              <h3>Failure Information</h3>
             </div>
 
-            <p>
-              {
-                environment.failureReason
-              }
-            </p>
+            <p>{environment.failureReason}</p>
           </div>
         )}
       </div>
@@ -517,13 +438,8 @@ return (
       <div className="details-activity-section">
         <div className="details-section-heading">
           <div>
-            <h2>
-              Activity Timeline
-            </h2>
-
-            <p>
-              Track environment lifecycle events.
-            </p>
+            <h2>Activity Timeline</h2>
+            <p>Track environment lifecycle events.</p>
           </div>
 
           <History size={21} />
@@ -532,58 +448,46 @@ return (
         <div className="glass-panel timeline-card">
           {activity.length === 0 ? (
             <div className="empty-state">
-              <h3>
-                No activity history
-              </h3>
+              <h3>No activity history</h3>
 
               <p>
-                No lifecycle events are available
-                for this environment.
+                No lifecycle events are available for this
+                environment.
               </p>
             </div>
           ) : (
             <div className="timeline">
-              {activity.map(
-                (item, index) => (
-                  <div
-                    className="timeline-item"
-                    key={
-                      item.activityId ||
-                      `${item.activityType}-${index}`
-                    }
-                  >
-                    <div className="timeline-marker">
-                      <div className="timeline-dot" />
-                    </div>
-
-                    <div className="timeline-content">
-                      <div className="timeline-top">
-                        <strong>
-                          {
-                            item.activityType
-                          }
-                        </strong>
-
-                        <span>
-                          {item.createdAt
-                            ? new Date(
-                                item.createdAt
-                              ).toLocaleString()
-                            : ""}
-                        </span>
-                      </div>
-
-                      {item.message && (
-                        <p>
-                          {
-                            item.message
-                          }
-                        </p>
-                      )}
-                    </div>
+              {activity.map((item, index) => (
+                <div
+                  className="timeline-item"
+                  key={
+                    item.activityId ||
+                    `${item.activityType}-${index}`
+                  }
+                >
+                  <div className="timeline-marker">
+                    <div className="timeline-dot" />
                   </div>
-                )
-              )}
+
+                  <div className="timeline-content">
+                    <div className="timeline-top">
+                      <strong>{item.activityType}</strong>
+
+                      <span>
+                        {item.createdAt
+                          ? new Date(
+                              item.createdAt
+                            ).toLocaleString()
+                          : ""}
+                      </span>
+                    </div>
+
+                    {item.message && (
+                      <p>{item.message}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -595,9 +499,7 @@ return (
         message="This environment will remain active for an additional 2 hours."
         confirmText="Extend 2 Hours"
         loading={actionLoading}
-        onCancel={() =>
-          setExtendModalOpen(false)
-        }
+        onCancel={() => setExtendModalOpen(false)}
         onConfirm={handleExtend}
       />
 
@@ -608,9 +510,7 @@ return (
         confirmText="Delete Environment"
         danger
         loading={actionLoading}
-        onCancel={() =>
-          setDeleteModalOpen(false)
-        }
+        onCancel={() => setDeleteModalOpen(false)}
         onConfirm={handleDelete}
       />
 
@@ -618,9 +518,7 @@ return (
         <Toast
           type={toast.type}
           message={toast.message}
-          onClose={() =>
-            setToast(null)
-          }
+          onClose={() => setToast(null)}
         />
       )}
     </>
