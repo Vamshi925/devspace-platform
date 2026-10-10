@@ -19,23 +19,23 @@ public class AdminUserService {
             UserRepository userRepository,
             RoleRepository roleRepository) {
 
-        this.userRepository =
-                userRepository;
-
-        this.roleRepository =
-                roleRepository;
+        this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
     }
 
     public UserRoleResponse updateUserRole(
-            String userId,
             UpdateUserRoleRequest request) {
 
+        String email = request.getEmail()
+                .trim()
+                .toLowerCase();
+
         User user =
-                userRepository.findById(userId)
+                userRepository.findByEmail(email)
                         .orElseThrow(() ->
                                 new IllegalArgumentException(
-                                        "User not found with id: "
-                                                + userId
+                                        "User not found with email: "
+                                                + email
                                 )
                         );
 
@@ -45,8 +45,7 @@ public class AdminUserService {
                         .toUpperCase();
 
         if (!requestedRole.equals("ROLE_USER")
-                &&
-                !requestedRole.equals("ROLE_ADMIN")) {
+                && !requestedRole.equals("ROLE_ADMIN")) {
 
             throw new IllegalArgumentException(
                     "Supported roles are ROLE_USER and ROLE_ADMIN"
@@ -63,14 +62,10 @@ public class AdminUserService {
                         )
                 );
 
-        user.setRole(
-                role
-        );
+        user.setRole(role);
 
         User updatedUser =
-                userRepository.save(
-                        user
-                );
+                userRepository.save(user);
 
         return new UserRoleResponse(
                 updatedUser.getUserId(),

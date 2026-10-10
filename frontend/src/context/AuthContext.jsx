@@ -1,15 +1,23 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 
 const AuthContext = createContext(null);
 
 function decodeToken(token) {
   try {
-    const payload = token.split(".")[1];
-    const decoded = atob(
-      payload.replace(/-/g, "+").replace(/_/g, "/")
+    const payload = JSON.parse(
+      atob(token.split(".")[1])
     );
 
-    return JSON.parse(decoded);
+    return {
+      userId: payload.userId,
+      email: payload.sub,
+      role: payload.role,
+    };
   } catch {
     return null;
   }
@@ -21,39 +29,39 @@ export function AuthProvider({ children }) {
   );
 
   const user = useMemo(() => {
-    if (!token) return null;
+    if (!token) {
+      return null;
+    }
 
-    const payload = decodeToken(token);
-
-    if (!payload) return null;
-
-    return {
-      userId: payload.userId,
-      role: payload.role,
-      email: payload.sub,
-    };
+    return decodeToken(token);
   }, [token]);
 
   const login = (newToken) => {
-    localStorage.setItem("token", newToken);
+    localStorage.setItem(
+      "token",
+      newToken
+    );
+
     setToken(newToken);
   };
 
   const logout = () => {
     localStorage.removeItem("token");
     setToken(null);
+
+    window.location.href = "/";
+  };
+
+  const value = {
+    token,
+    user,
+    login,
+    logout,
+    isAuthenticated: !!token,
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        token,
-        user,
-        login,
-        logout,
-        isAuthenticated: !!token,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
