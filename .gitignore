@@ -21,8 +21,6 @@ Thumbs.db
 logs/
 
 # Environment files / secrets
-.env
-.env.*
 application-local.properties
 application-secret.properties
 
