@@ -1,19 +1,216 @@
-services:
 
+name: devspace
+
+services:
+  # ---------- PostgreSQL ----------
   postgres-environment:
     image: postgres:17
     container_name: devspace-postgres-environment
-
+    restart: unless-stopped
     environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Required}
       POSTGRES_DB: devspace_environment
-      POSTGRES_USER: devspace
-      POSTGRES_PASSWORD: devspace
-
     ports:
-      - "5432:5432"
-
+      - "127.0.0.1:5432:5432"
     volumes:
-      - environment-postgres-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/01-init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d devspace_environment"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - devspace-network
 
+  # ---------- API Gateway ----------
+  api-gateway:
+    image: devspace/api-gateway:local
+    build:
+      context: ../services/api-gateway
+      dockerfile: Dockerfile
+    container_name: devspace-api-gateway
+    restart: unless-stopped
+    depends_on:
+      environment-service:
+        condition: service_healthy
+      template-service:
+        condition: service_healthy
+      login-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DEVSPACE_JWT_SECRET: ${DEVSPACE_JWT_SECRET:?Required}
+      DEVSPACE_GATEWAY_KEY: ${DEVSPACE_GATEWAY_KEY:?Required}
+      ENVIRONMENT_SERVICE_URL: http://environment-service:8086
+      TEMPLATE_SERVICE_URL: http://template-service:8087
+      LOGIN_SERVICE_URL: http://login-service:8089
+      NOTIFICATION_SERVICE_URL: http://notification-service:8090
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - devspace-network
+
+  # ---------- Environment Service ----------
+  environment-service:
+    image: devspace/environment-service:local
+    build:
+      context: ../services/environment-service
+      dockerfile: Dockerfile
+    container_name: devspace-environment-service
+    restart: unless-stopped
+    depends_on:
+      postgres-environment:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8086:8086"
+    environment:
+      DB_URL: jdbc:postgresql://devspace-postgres-environment:5432/devspace_environment
+      DB_USERNAME: ${POSTGRES_USER:?Required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Required}
+      DEVSPACE_GATEWAY_KEY: ${DEVSPACE_GATEWAY_KEY:?Required}
+      DEVSPACE_INTERNAL_API_KEY: ${DEVSPACE_INTERNAL_API_KEY:?Required}
+      TEMPLATE_SERVICE_URL: http://template-service:8087
+      PROVISIONING_SERVICE_URL: http://provisioning-service:8088
+      NOTIFICATION_SERVICE_URL: http://notification-service:8090
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8086/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - devspace-network
+
+  # ---------- Template Service ----------
+  template-service:
+    image: devspace/template-service:local
+    build:
+      context: ../services/template-service
+      dockerfile: Dockerfile
+    container_name: devspace-template-service
+    restart: unless-stopped
+    depends_on:
+      postgres-environment:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8087:8087"
+    environment:
+      DB_URL: jdbc:postgresql://devspace-postgres-environment:5432/devspace_template
+      DB_USERNAME: ${POSTGRES_USER:?Required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Required}
+      DEVSPACE_GATEWAY_KEY: ${DEVSPACE_GATEWAY_KEY:?Required}
+      DEVSPACE_INTERNAL_API_KEY: ${DEVSPACE_INTERNAL_API_KEY:?Required}
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8087/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - devspace-network
+
+  # ---------- Provisioning Service ----------
+  provisioning-service:
+    image: devspace/provisioning-service:local
+    build:
+      context: ../services/provisioning-service
+      dockerfile: Dockerfile
+    container_name: devspace-provisioning-service
+    restart: unless-stopped
+    depends_on:
+      environment-service:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8088:8088"
+    environment:
+      ENVIRONMENT_SERVICE_URL: http://environment-service:8086
+      KUBERNETES_MOCK: "true"
+      INGRESS_BASE_URL: http://devspace.local
+      DEVSPACE_INTERNAL_API_KEY: ${DEVSPACE_INTERNAL_API_KEY:?Required}
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8088/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - devspace-network
+
+  # ---------- Login Service ----------
+  login-service:
+    image: devspace/login-service:local
+    build:
+      context: ../services/login-service
+      dockerfile: Dockerfile
+    container_name: devspace-login-service
+    restart: unless-stopped
+    depends_on:
+      postgres-environment:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8089:8089"
+    environment:
+      DB_URL: jdbc:postgresql://devspace-postgres-environment:5432/devspace_login
+      DB_USERNAME: ${POSTGRES_USER:?Required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Required}
+      DEVSPACE_JWT_SECRET: ${DEVSPACE_JWT_SECRET:?Required}
+      JWT_EXPIRATION_MS: "86400000"
+      DEVSPACE_ADMIN_EMAIL: platformadmin@devspace.com
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8089/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - devspace-network
+
+  # ---------- Notification Service ----------
+  notification-service:
+    image: devspace/notification-service:local
+    build:
+      context: ../services/notification-service
+      dockerfile: Dockerfile
+    container_name: devspace-notification-service
+    restart: unless-stopped
+    depends_on:
+      postgres-environment:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8090:8090"
+    environment:
+      DB_URL: jdbc:postgresql://devspace-postgres-environment:5432/devspace_notification
+      DB_USERNAME: ${POSTGRES_USER:?Required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Required}
+      DEVSPACE_GATEWAY_KEY: ${DEVSPACE_GATEWAY_KEY:?Required}
+      DEVSPACE_INTERNAL_API_KEY: ${DEVSPACE_INTERNAL_API_KEY:?Required}
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8090/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - devspace-network
+
+# ---------- Existing PostgreSQL Volume ----------
 volumes:
-  environment-postgres-data:
+  postgres_data:
+    external: true
+    name: docker_environment-postgres-data
+
+# ---------- Existing Docker Network ----------
+networks:
+  devspace-network:
+    external: true
+    name: devspace-network
