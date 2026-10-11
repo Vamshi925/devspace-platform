@@ -3,11 +3,9 @@ import {
   useMemo,
   useState,
 } from "react";
-
 import {
   useNavigate,
 } from "react-router-dom";
-
 import {
   CircleCheckBig,
   CircleX,
@@ -21,96 +19,77 @@ import {
   Server,
   Trash2,
 } from "lucide-react";
-
 import {
   deleteEnvironment,
   extendEnvironment,
   getMyEnvironments,
 } from "../api/environmentApi";
-
 import EnvironmentTableSkeleton
   from "../components/EnvironmentTableSkeleton";
-
 import ConfirmModal
   from "../components/ConfirmModal";
-
 import Toast
   from "../components/Toast";
+import { getErrorMessage } from "../utils/getErrorMessage";
 
 function Environments() {
   const navigate = useNavigate();
-
   const [
     environments,
     setEnvironments,
   ] = useState([]);
-
   const [
     loading,
     setLoading,
   ] = useState(true);
-
   const [
     error,
     setError,
   ] = useState("");
-
   const [
     search,
     setSearch,
   ] = useState("");
-
   const [
     statusFilter,
     setStatusFilter,
   ] = useState("ALL");
-
   const [
     toast,
     setToast,
   ] = useState(null);
-
   const [
     selectedEnvironment,
     setSelectedEnvironment,
   ] = useState(null);
-
   const [
     confirmationAction,
     setConfirmationAction,
   ] = useState(null);
-
   const [
     actionLoading,
     setActionLoading,
   ] = useState(false);
-
   const loadEnvironments = async () => {
     try {
       setLoading(true);
-
       const data =
         await getMyEnvironments();
-
       setEnvironments(
         data || []
       );
-
       setError("");
     } catch (error) {
       setError(
-        error.response?.data?.message ||
-          "Unable to load environments"
+        getErrorMessage(error, "Unable to load environments")
       );
     } finally {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     loadEnvironments();
   }, []);
-
   const showToast = (
     type,
     message
@@ -119,60 +98,49 @@ function Environments() {
       type,
       message,
     });
-
     setTimeout(() => {
       setToast(null);
     }, 3500);
   };
-
   const requestExtend = (
     environment
   ) => {
     setSelectedEnvironment(
       environment
     );
-
     setConfirmationAction(
       "EXTEND"
     );
   };
-
   const requestDelete = (
     environment
   ) => {
     setSelectedEnvironment(
       environment
     );
-
     setConfirmationAction(
       "DELETE"
     );
   };
-
   const closeConfirmation =
     () => {
       if (actionLoading) {
         return;
       }
-
       setSelectedEnvironment(
         null
       );
-
       setConfirmationAction(
         null
       );
     };
-
   const handleConfirmAction =
     async () => {
       if (!selectedEnvironment) {
         return;
       }
-
       try {
         setActionLoading(true);
-
         if (
           confirmationAction ===
           "EXTEND"
@@ -182,13 +150,11 @@ function Environments() {
               .environmentId,
             2
           );
-
           showToast(
             "success",
             `"${selectedEnvironment.applicationName}" extended by 2 hours.`
           );
         }
-
         if (
           confirmationAction ===
           "DELETE"
@@ -197,40 +163,33 @@ function Environments() {
             selectedEnvironment
               .environmentId
           );
-
           showToast(
             "success",
             `Deletion started for "${selectedEnvironment.applicationName}".`
           );
         }
-
         setSelectedEnvironment(
           null
         );
-
         setConfirmationAction(
           null
         );
-
         await loadEnvironments();
       } catch (error) {
         showToast(
           "error",
-          error.response?.data?.message ||
-            "Unable to update environment"
+          getErrorMessage(error, "Unable to update environment")
         );
       } finally {
         setActionLoading(false);
       }
     };
-
   const filteredEnvironments =
     useMemo(() => {
       const query =
         search
           .trim()
           .toLowerCase();
-
       return environments.filter(
         (environment) => {
           const matchesSearch =
@@ -242,12 +201,10 @@ function Environments() {
               .environmentCode
               ?.toLowerCase()
               .includes(query);
-
           const matchesStatus =
             statusFilter === "ALL" ||
             environment.status ===
               statusFilter;
-
           return (
             matchesSearch &&
             matchesStatus
@@ -259,33 +216,26 @@ function Environments() {
       search,
       statusFilter,
     ]);
-
   const getStatusClass = (
     status
   ) => {
     switch (status) {
       case "READY":
         return "status-ready";
-
       case "REQUESTED":
       case "PROVISIONING":
         return "status-provisioning";
-
       case "FAILED":
         return "status-failed";
-
       case "EXPIRED":
         return "status-expired";
-
       case "DELETED":
       case "DELETING":
         return "status-deleted";
-
       default:
         return "status-deleted";
     }
   };
-
   const getRemainingTime = (
     expiresAt,
     status
@@ -300,47 +250,37 @@ function Environments() {
     ) {
       return null;
     }
-
     const difference =
       new Date(expiresAt).getTime() -
       Date.now();
-
     if (difference <= 0) {
       return "Expired";
     }
-
     const totalMinutes =
       Math.floor(
         difference / 60000
       );
-
     const hours =
       Math.floor(
         totalMinutes / 60
       );
-
     const minutes =
       totalMinutes % 60;
-
     if (hours > 0) {
       return `${hours}h ${minutes}m remaining`;
     }
-
     return `${minutes}m remaining`;
   };
-
   const counts = useMemo(
     () => ({
       total:
         environments.length,
-
       ready:
         environments.filter(
           (environment) =>
             environment.status ===
             "READY"
         ).length,
-
       provisioning:
         environments.filter(
           (environment) =>
@@ -351,7 +291,6 @@ function Environments() {
               environment.status
             )
         ).length,
-
       failed:
         environments.filter(
           (environment) =>
@@ -361,39 +300,32 @@ function Environments() {
     }),
     [environments]
   );
-
   const hasFilters =
     search.trim() !== "" ||
     statusFilter !== "ALL";
-
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("ALL");
   };
-
   if (loading) {
     return (
       <EnvironmentTableSkeleton />
     );
   }
-
   return (
     <>
       {/* HEADER */}
-
       <div className="page-header">
         <div>
           <h1 className="page-title">
             My Environments
           </h1>
-
           <p className="page-subtitle">
             Create, monitor and manage
             your temporary developer
             environments.
           </p>
         </div>
-
         <button
           className="btn btn-primary"
           onClick={() =>
@@ -406,81 +338,65 @@ function Environments() {
           Create Environment
         </button>
       </div>
-
       {/* SUMMARY */}
-
       <div className="environment-metric-row">
         <div className="environment-metric-card">
           <div className="environment-metric-icon metric-purple">
             <Server size={16} />
           </div>
-
           <div>
             <span>
               Total
             </span>
-
             <strong>
               {counts.total}
             </strong>
           </div>
         </div>
-
         <div className="environment-metric-card">
           <div className="environment-metric-icon metric-green">
             <CircleCheckBig size={16} />
           </div>
-
           <div>
             <span>
               Ready
             </span>
-
             <strong>
               {counts.ready}
             </strong>
           </div>
         </div>
-
         <div className="environment-metric-card">
           <div className="environment-metric-icon metric-cyan">
             <LoaderCircle size={16} />
           </div>
-
           <div>
             <span>
               Provisioning
             </span>
-
             <strong>
               {counts.provisioning}
             </strong>
           </div>
         </div>
-
         <div className="environment-metric-card">
           <div className="environment-metric-icon metric-red">
             <CircleX size={16} />
           </div>
-
           <div>
             <span>
               Failed
             </span>
-
             <strong>
               {counts.failed}
             </strong>
           </div>
         </div>
       </div>
-
       {/* FILTERS */}
-
       <div className="environment-toolbar">
         <div className="environment-search">
           <Search size={17} />
-
           <input
             type="text"
             placeholder="Search by application or environment code..."
@@ -492,7 +408,6 @@ function Environments() {
             }
           />
         </div>
-
         <select
           className="environment-filter"
           value={statusFilter}
@@ -505,36 +420,28 @@ function Environments() {
           <option value="ALL">
             All Statuses
           </option>
-
           <option value="REQUESTED">
             Requested
           </option>
-
           <option value="PROVISIONING">
             Provisioning
           </option>
-
           <option value="READY">
             Ready
           </option>
-
           <option value="FAILED">
             Failed
           </option>
-
           <option value="EXPIRED">
             Expired
           </option>
-
           <option value="DELETING">
             Deleting
           </option>
-
           <option value="DELETED">
             Deleted
           </option>
         </select>
-
         {hasFilters && (
           <button
             className="btn btn-ghost environment-clear-filter"
@@ -545,18 +452,15 @@ function Environments() {
             <RotateCcw
               size={14}
             />
-
             Clear
           </button>
         )}
       </div>
-
       {error && (
         <div className="glass-panel environment-error">
           {error}
         </div>
       )}
-
       <div className="environment-summary-line">
         Showing{" "}
         <strong>
@@ -572,28 +476,23 @@ function Environments() {
         </strong>{" "}
         environments
       </div>
-
       {/* EMPTY STATE */}
-
       {filteredEnvironments.length ===
       0 ? (
         <div className="glass-panel environment-empty-state">
           <div className="environment-empty-icon">
             <Server size={28} />
           </div>
-
           <h3>
             {hasFilters
               ? "No matching environments"
               : "No environments yet"}
           </h3>
-
           <p>
             {hasFilters
               ? "Try changing your search or status filter."
               : "Launch your first temporary developer environment using an approved template."}
           </p>
-
           <div className="environment-empty-actions">
             {hasFilters && (
               <button
@@ -605,11 +504,9 @@ function Environments() {
                 <RotateCcw
                   size={15}
                 />
-
                 Clear Filters
               </button>
             )}
-
             <button
               className="btn btn-primary"
               onClick={() =>
@@ -619,14 +516,12 @@ function Environments() {
               }
             >
               <Plus size={16} />
-
               Create Environment
             </button>
           </div>
         </div>
       ) : (
         /* TABLE */
-
         <div className="table-container environments-table-container">
           <table className="dev-table">
             <thead>
@@ -634,33 +529,26 @@ function Environments() {
                 <th>
                   Application
                 </th>
-
                 <th>
                   Status
                 </th>
-
                 <th>
                   Stage
                 </th>
-
                 <th>
                   Type
                 </th>
-
                 <th>
                   Expires
                 </th>
-
                 <th>
                   Environment URL
                 </th>
-
                 <th>
                   Actions
                 </th>
               </tr>
             </thead>
-
             <tbody>
               {filteredEnvironments.map(
                 (
@@ -671,7 +559,6 @@ function Environments() {
                       environment.expiresAt,
                       environment.status
                     );
-
                   return (
                     <tr
                       key={
@@ -684,14 +571,12 @@ function Environments() {
                             environment.applicationName
                           }
                         </div>
-
                         <div className="environment-code">
                           {
                             environment.environmentCode
                           }
                         </div>
                       </td>
-
                       <td>
                         <span
                           className={`status-badge ${getStatusClass(
@@ -703,7 +588,6 @@ function Environments() {
                           }
                         </span>
                       </td>
-
                       <td>
                         <span className="environment-stage">
                           {
@@ -712,7 +596,6 @@ function Environments() {
                           }
                         </span>
                       </td>
-
                       <td>
                         <span className="environment-type-label">
                           {
@@ -720,13 +603,11 @@ function Environments() {
                           }
                         </span>
                       </td>
-
                       <td>
                         <div className="environment-expiry">
                           <Clock3
                             size={14}
                           />
-
                           <div>
                             <span>
                               {environment.expiresAt
@@ -735,7 +616,6 @@ function Environments() {
                                   ).toLocaleString()
                                 : "-"}
                             </span>
-
                             {remaining && (
                               <small>
                                 {
@@ -746,7 +626,6 @@ function Environments() {
                           </div>
                         </div>
                       </td>
-
                       <td>
                         {environment.applicationUrl ? (
                           <a
@@ -758,7 +637,6 @@ function Environments() {
                             className="environment-url"
                           >
                             Open
-
                             <ExternalLink
                               size={14}
                             />
@@ -769,7 +647,6 @@ function Environments() {
                           </span>
                         )}
                       </td>
-
                       <td>
                         <div className="environment-actions">
                           <button
@@ -783,10 +660,8 @@ function Environments() {
                             <Eye
                               size={14}
                             />
-
                             View
                           </button>
-
                           {environment.status ===
                             "READY" && (
                             <button
@@ -803,7 +678,6 @@ function Environments() {
                               />
                             </button>
                           )}
-
                           {![
                             "DELETED",
                             "DELETING",
@@ -835,9 +709,7 @@ function Environments() {
           </table>
         </div>
       )}
-
       {/* EXTEND */}
-
       <ConfirmModal
         open={
           confirmationAction ===
@@ -861,9 +733,7 @@ function Environments() {
           handleConfirmAction
         }
       />
-
       {/* DELETE */}
-
       <ConfirmModal
         open={
           confirmationAction ===
@@ -888,9 +758,7 @@ function Environments() {
           handleConfirmAction
         }
       />
-
       {/* TOAST */}
-
       {toast && (
         <Toast
           type={
@@ -907,5 +775,4 @@ function Environments() {
     </>
   );
 }
-
 export default Environments;

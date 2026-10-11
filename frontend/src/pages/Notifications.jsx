@@ -1,152 +1,200 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bell, CheckCheck, CircleAlert, CircleCheckBig, Clock3, Server } from "lucide-react";
-import { getMyNotifications, markNotificationAsRead } from "../api/notificationApi";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Bell,
+  CheckCheck,
+  CircleAlert,
+  CircleCheckBig,
+  Clock3,
+  Server,
+} from "lucide-react";
+
+import {
+  getMyNotifications,
+  markNotificationAsRead,
+} from "../api/notificationApi";
+
 import NotificationsSkeleton from "../components/NotificationsSkeleton";
 import Toast from "../components/Toast";
-import { NOTIFICATIONS_UPDATED, emitNotificationsUpdated } from "../utils/appEvents";
+import { emitNotificationsUpdated } from "../utils/appEvents";
+import { getErrorMessage } from "../utils/getErrorMessage";
 
 function Notifications() {
-  const [notifications,setNotifications]=useState([]);
-  const [filter,setFilter]=useState("ALL");
-  const [loading,setLoading]=useState(true);
-  const [error,setError]=useState("");
-  const [toast,setToast]=useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState(null);
 
-  const showToast=(type,message)=>{
-    setToast({type,message});
-    setTimeout(()=>setToast(null),3500);
+  const showToast = (type, message) => {
+    setToast({ type, message });
+
+    setTimeout(() => {
+      setToast(null);
+    }, 3500);
   };
 
-  const loadNotifications=useCallback(async(showLoader=true)=>{
+  const loadNotifications = useCallback(async (showLoader = true) => {
     try {
-      if(showLoader) setLoading(true);
-      const data=await getMyNotifications();
-      setNotifications(data||[]);
+      if (showLoader) {
+        setLoading(true);
+      }
+
+      const data = await getMyNotifications();
+
+      const unreadNotifications = (data || []).filter(
+        (notification) => !notification.read
+      );
+
+      setNotifications(unreadNotifications);
       setError("");
-    } catch(error) {
-      if(showLoader){
-        setError(error.response?.data?.message||"Unable to load notifications");
+    } catch (error) {
+      if (showLoader) {
+        setError(
+          getErrorMessage(
+            error,
+            "Unable to load notifications"
+          )
+        );
       }
     } finally {
-      if(showLoader) setLoading(false);
+      if (showLoader) {
+        setLoading(false);
+      }
     }
-  },[]);
+  }, []);
 
-  useEffect(()=>{
+  useEffect(() => {
     loadNotifications(true);
-    const refresh=()=>loadNotifications(false);
-    const interval=setInterval(()=>loadNotifications(false),15000);
-    window.addEventListener(NOTIFICATIONS_UPDATED,refresh);
-    return()=>{
-      clearInterval(interval);
-      window.removeEventListener(NOTIFICATIONS_UPDATED,refresh);
-    };
-  },[loadNotifications]);
 
-  const handleMarkRead=async(notificationId)=>{
+    const interval = setInterval(
+      () => loadNotifications(false),
+      15000
+    );
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [loadNotifications]);
+
+  const handleMarkRead = async (notificationId) => {
     try {
       await markNotificationAsRead(notificationId);
-      setNotifications((current)=>current.map((notification)=>
-        notification.notificationId===notificationId?{...notification,read:true}:notification
-      ));
+
+      setNotifications((current) =>
+        current.filter(
+          (notification) =>
+            notification.notificationId !== notificationId
+        )
+      );
+
       emitNotificationsUpdated();
-    } catch(error) {
-      showToast("error",error.response?.data?.message||"Unable to mark notification as read");
+
+      showToast(
+        "success",
+        "Notification marked as read."
+      );
+    } catch (error) {
+      showToast(
+        "error",
+        getErrorMessage(
+          error,
+          "Unable to mark notification as read"
+        )
+      );
     }
   };
 
-  const filteredNotifications=useMemo(()=>{
-    if(filter==="UNREAD") return notifications.filter((notification)=>!notification.read);
-    if(filter==="READ") return notifications.filter((notification)=>notification.read);
-    return notifications;
-  },[notifications,filter]);
+  const unreadCount = notifications.length;
 
-  const unreadCount=notifications.filter((notification)=>!notification.read).length;
-
-  const getNotificationIcon=(type)=>{
-    switch(type){
+  const getNotificationIcon = (type) => {
+    switch (type) {
       case "ENVIRONMENT_READY":
-        return <CircleCheckBig size={20}/>;
+        return <CircleCheckBig size={20} />;
+
       case "ENVIRONMENT_FAILED":
-        return <CircleAlert size={20}/>;
+        return <CircleAlert size={20} />;
+
       case "ENVIRONMENT_EXPIRING":
       case "ENVIRONMENT_EXPIRED":
-        return <Clock3 size={20}/>;
+        return <Clock3 size={20} />;
+
       case "ENVIRONMENT_DELETED":
-        return <Server size={20}/>;
+        return <Server size={20} />;
+
       default:
-        return <Bell size={20}/>;
+        return <Bell size={20} />;
     }
   };
 
-  const getNotificationClass=(type)=>{
-    switch(type){
+  const getNotificationClass = (type) => {
+    switch (type) {
       case "ENVIRONMENT_READY":
         return "notification-ready";
+
       case "ENVIRONMENT_FAILED":
         return "notification-failed";
+
       case "ENVIRONMENT_EXPIRING":
       case "ENVIRONMENT_EXPIRED":
         return "notification-warning";
+
       default:
         return "notification-neutral";
     }
   };
 
-  if(loading) return <NotificationsSkeleton/>;
+  if (loading) {
+    return <NotificationsSkeleton />;
+  }
 
   return (
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Notifications</h1>
-          <p className="page-subtitle">Track environment lifecycle updates and platform events.</p>
+          <h1 className="page-title">
+            Notifications
+          </h1>
+
+          <p className="page-subtitle">
+            Track unread environment lifecycle updates and platform events.
+          </p>
         </div>
+
         <div className="notifications-header-count">
-          <Bell size={17}/>
+          <Bell size={17} />
           <span>{unreadCount} unread</span>
         </div>
       </div>
 
-      <div className="notification-filter-bar">
-        <button
-          className={`notification-filter-button ${filter==="ALL"?"active":""}`}
-          onClick={()=>setFilter("ALL")}
-        >
-          All <span>{notifications.length}</span>
-        </button>
-        <button
-          className={`notification-filter-button ${filter==="UNREAD"?"active":""}`}
-          onClick={()=>setFilter("UNREAD")}
-        >
-          Unread <span>{unreadCount}</span>
-        </button>
-        <button
-          className={`notification-filter-button ${filter==="READ"?"active":""}`}
-          onClick={()=>setFilter("READ")}
-        >
-          Read <span>{notifications.length-unreadCount}</span>
-        </button>
-      </div>
+      {error && (
+        <div className="glass-panel environment-error">
+          {error}
+        </div>
+      )}
 
-      {error&&<div className="glass-panel environment-error">{error}</div>}
-
-      {filteredNotifications.length===0?(
+      {notifications.length === 0 ? (
         <div className="glass-panel notifications-empty-page">
           <div className="notifications-empty-icon">
-            <Bell size={28}/>
+            <Bell size={28} />
           </div>
-          <h3>No notifications</h3>
-          <p>There are no notifications matching this filter.</p>
+
+          <h3>You're all caught up</h3>
+
+          <p>
+            You have no unread notifications.
+          </p>
         </div>
-      ):(
+      ) : (
         <div className="notifications-list">
-          {filteredNotifications.map((notification)=>(
+          {notifications.map((notification) => (
             <div
               key={notification.notificationId}
-              className={`notification-card ${!notification.read?"notification-card-unread":""}`}
+              className="notification-card notification-card-unread"
             >
-              <div className={`notification-type-icon ${getNotificationClass(notification.type)}`}>
+              <div
+                className={`notification-type-icon ${getNotificationClass(
+                  notification.type
+                )}`}
+              >
                 {getNotificationIcon(notification.type)}
               </div>
 
@@ -155,46 +203,63 @@ function Notifications() {
                   <div>
                     <div className="notification-title-row">
                       <h3>{notification.title}</h3>
-                      {!notification.read&&<span className="notification-new-badge">NEW</span>}
+
+                      <span className="notification-new-badge">
+                        NEW
+                      </span>
                     </div>
-                    <span className="notification-type">{notification.type}</span>
+
+                    <span className="notification-type">
+                      {notification.type}
+                    </span>
                   </div>
 
                   <span className="notification-time">
-                    {notification.createdAt?new Date(notification.createdAt).toLocaleString():""}
+                    {notification.createdAt
+                      ? new Date(
+                          notification.createdAt
+                        ).toLocaleString()
+                      : ""}
                   </span>
                 </div>
 
-                <p className="notification-message">{notification.message}</p>
+                <p className="notification-message">
+                  {notification.message}
+                </p>
 
-                {notification.environmentId&&(
+                {notification.environmentId && (
                   <div className="notification-environment">
-                    <Server size={14}/>
+                    <Server size={14} />
                     Environment:
-                    <span>{notification.environmentId}</span>
+                    <span>
+                      {notification.environmentId}
+                    </span>
                   </div>
                 )}
 
-                {!notification.read&&(
-                  <button
-                    className="notification-read-button"
-                    onClick={()=>handleMarkRead(notification.notificationId)}
-                  >
-                    <CheckCheck size={15}/>
-                    Mark as Read
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="notification-read-button"
+                  onClick={() =>
+                    handleMarkRead(
+                      notification.notificationId
+                    )
+                  }
+                >
+                  <CheckCheck size={15} />
+                  Mark as Read
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {toast&&(
+      {toast && (
         <Toast
           type={toast.type}
           message={toast.message}
-          onClose={()=>setToast(null)}
+          onClose={() => setToast(null)}
         />
       )}
     </>
