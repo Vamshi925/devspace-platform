@@ -57,9 +57,17 @@ jobs:
         working-directory: services/${{ matrix.service }}
         env:
           APP_SEED_ENABLED: 'false'
+
+          # CI-only PostgreSQL configuration
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/devspace_test
           SPRING_DATASOURCE_USERNAME: devspace
           SPRING_DATASOURCE_PASSWORD: devspace_test_password
+
+          # CI-only authentication values
+          DEVSPACE_JWT_SECRET: 'devspace-ci-jwt-signing-key-for-tests-only-2026'
+          DEVSPACE_GATEWAY_KEY: 'devspace-ci-gateway-key-for-tests-only'
+          DEVSPACE_INTERNAL_API_KEY: 'devspace-ci-internal-api-key-for-tests-only'
+
         run: mvn clean verify -B
 
   frontend:
