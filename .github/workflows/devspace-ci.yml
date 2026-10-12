@@ -11,6 +11,7 @@ permissions:
   contents: read
 
 jobs:
+
   # ==========================================
   # 1. BACKEND BUILD AND UNIT TESTS
   # ==========================================
@@ -61,17 +62,12 @@ jobs:
         working-directory: services/${{ matrix.service }}
         env:
           APP_SEED_ENABLED: 'false'
-
-          # CI-only PostgreSQL configuration
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/devspace_test
           SPRING_DATASOURCE_USERNAME: devspace
           SPRING_DATASOURCE_PASSWORD: devspace_test_password
-
-          # CI-only authentication values
           DEVSPACE_JWT_SECRET: 'devspace-ci-jwt-signing-key-for-tests-only-2026'
           DEVSPACE_GATEWAY_KEY: 'devspace-ci-gateway-key-for-tests-only'
           DEVSPACE_INTERNAL_API_KEY: 'devspace-ci-internal-api-key-for-tests-only'
-
         run: mvn clean verify -B
 
   # ==========================================
@@ -102,16 +98,73 @@ jobs:
         run: npm run build
 
   # ==========================================
-  # 3. SECURITY SCANNING
+  # 3. SECURITY - SONARQUBE, SNYK, TRIVY
   # ==========================================
 
   security:
-    name: Trivy Filesystem Scan
+    name: Security - SonarQube, Snyk, Trivy
+    needs: [backend, frontend]
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/**/pom.xml
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Compile Java Services for SonarQube
+        run: |
+          for service in \
+            environment-service \
+            template-service \
+            provisioning-service \
+            login-service \
+            notification-service \
+            api-gateway
+          do
+            echo "Compiling $service"
+
+            mvn -f "services/$service/pom.xml" \
+              clean package -DskipTests -B
+          done
+
+      - name: SonarQube Cloud Scan
+        uses: SonarSource/sonarqube-scan-action@v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=Vamshi925_devspace-platform
+            -Dsonar.organization=vamshi925
+            -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.projectName=DevSpace-Platform
+            -Dsonar.sources=services,frontend/src
+            -Dsonar.tests=services
+            -Dsonar.test.inclusions=**/src/test/**
+            -Dsonar.exclusions=**/target/**,**/node_modules/**,**/dist/**,**/src/test/**
+            -Dsonar.java.binaries=services/environment-service/target/classes,services/template-service/target/classes,services/provisioning-service/target/classes,services/login-service/target/classes,services/notification-service/target/classes,services/api-gateway/target/classes
+            -Dsonar.sourceEncoding=UTF-8
+
+      - name: Run Snyk Dependency Scan
+        uses: snyk/actions/maven@0.4.0
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --all-projects
 
       - name: Run Trivy Filesystem Scan
         uses: aquasecurity/trivy-action@v0.36.0
