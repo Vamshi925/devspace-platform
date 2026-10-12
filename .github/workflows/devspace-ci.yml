@@ -11,9 +11,13 @@ permissions:
   contents: read
 
 jobs:
+  # ==========================================
+  # 1. BACKEND BUILD AND UNIT TESTS
+  # ==========================================
+
   backend:
     name: Build & Test - ${{ matrix.service }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -43,10 +47,10 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -70,16 +74,20 @@ jobs:
 
         run: mvn clean verify -B
 
+  # ==========================================
+  # 2. REACT FRONTEND BUILD
+  # ==========================================
+
   frontend:
     name: Build React Frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
@@ -93,13 +101,17 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+  # ==========================================
+  # 3. SECURITY SCANNING
+  # ==========================================
+
   security:
     name: Trivy Filesystem Scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run Trivy Filesystem Scan
         uses: aquasecurity/trivy-action@v0.36.0
@@ -110,10 +122,14 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '0'
 
+  # ==========================================
+  # 4. DOCKER BUILD, SCAN AND PUBLISH
+  # ==========================================
+
   docker:
     name: Docker Image - ${{ matrix.service }}
     needs: [backend, frontend, security]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -129,10 +145,10 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Resolve Image Context
         id: image
@@ -165,7 +181,7 @@ jobs:
 
       - name: Login to Docker Hub
         if: github.event_name == 'push'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
