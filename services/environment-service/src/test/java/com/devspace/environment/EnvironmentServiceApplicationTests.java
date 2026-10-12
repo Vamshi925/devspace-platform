@@ -23,6 +23,8 @@ import com.devspace.environment.dto.request.ProvisioningRequest;
 import com.devspace.environment.dto.response.EnvironmentResponse;
 import com.devspace.environment.dto.response.ProvisioningResponse;
 import com.devspace.environment.dto.response.TemplateResponse;
+import com.devspace.environment.repository.EnvironmentRepository;
+import com.devspace.environment.repository.EnvironmentActivityRepository;
 import com.devspace.environment.exception.EnvironmentAccessDeniedException;
 import com.devspace.environment.exception.EnvironmentNotFoundException;
 import com.devspace.environment.model.Environment;
@@ -42,6 +44,9 @@ class EnvironmentServiceApplicationTests {
     @Mock
     private TemplateServiceClient templateServiceClient;
 
+    @Mock
+    private EnvironmentActivityRepository activityRepository;
+    
     @Mock
     private GitHubRepositoryClient gitHubRepositoryClient;
 

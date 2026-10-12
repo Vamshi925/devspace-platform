@@ -1,8 +1,7 @@
+
 package com.devspace.environment.controller;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -13,6 +12,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -25,6 +25,7 @@ import com.devspace.environment.model.EnvironmentType;
 import com.devspace.environment.service.EnvironmentService;
 
 @WebMvcTest(EnvironmentController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class EnvironmentControllerTest {
 
     @Autowired
@@ -81,7 +82,6 @@ class EnvironmentControllerTest {
     @Test
     void shouldReturnValidationErrorWhenApplicationNameMissing()
             throws Exception {
-
         mockMvc.perform(post("/api/environments")
                         .header("X-User-Id", "user-001")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -101,55 +101,37 @@ class EnvironmentControllerTest {
     @Test
     void shouldGetEnvironmentById() throws Exception {
         when(environmentService.getEnvironmentById(
-                "env-123",
-                "user-001",
-                "ROLE_USER"
-        )).thenReturn(createResponse());
+                "env-123", "user-001", "ROLE_USER"))
+                .thenReturn(createResponse());
 
         mockMvc.perform(get("/api/environments/env-123")
                         .header("X-User-Id", "user-001")
                         .header("X-User-Role", "ROLE_USER"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.environmentId").value("env-123"))
-                .andExpect(jsonPath("$.applicationName")
-                        .value("payment-service"));
+                .andExpect(jsonPath("$.applicationName").value("payment-service"));
     }
 
     @Test
-    void shouldReturn404WhenEnvironmentNotFound()
-            throws Exception {
-
+    void shouldReturn404WhenEnvironmentNotFound() throws Exception {
         when(environmentService.getEnvironmentById(
-                "invalid-id",
-                "user-001",
-                "ROLE_USER"
-        )).thenThrow(
-                new EnvironmentNotFoundException(
-                        "Environment not found with id: invalid-id"
-                )
-        );
+                "invalid-id", "user-001", "ROLE_USER"))
+                .thenThrow(new EnvironmentNotFoundException(
+                        "Environment not found with id: invalid-id"));
 
         mockMvc.perform(get("/api/environments/invalid-id")
                         .header("X-User-Id", "user-001")
                         .header("X-User-Role", "ROLE_USER"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error")
-                        .value("ENVIRONMENT_NOT_FOUND"));
+                .andExpect(jsonPath("$.error").value("ENVIRONMENT_NOT_FOUND"));
     }
 
     @Test
-    void shouldReturn403WhenAccessDenied()
-            throws Exception {
-
+    void shouldReturn403WhenAccessDenied() throws Exception {
         when(environmentService.getEnvironmentById(
-                "env-123",
-                "user-002",
-                "ROLE_USER"
-        )).thenThrow(
-                new EnvironmentAccessDeniedException(
-                        "You are not allowed to access this environment"
-                )
-        );
+                "env-123", "user-002", "ROLE_USER"))
+                .thenThrow(new EnvironmentAccessDeniedException(
+                        "You are not allowed to access this environment"));
 
         mockMvc.perform(get("/api/environments/env-123")
                         .header("X-User-Id", "user-002")
@@ -175,10 +157,8 @@ class EnvironmentControllerTest {
         response.setStatus(EnvironmentStatus.DELETING);
 
         when(environmentService.deleteEnvironment(
-                "env-123",
-                "user-001",
-                "ROLE_USER"
-        )).thenReturn(response);
+                "env-123", "user-001", "ROLE_USER"))
+                .thenReturn(response);
 
         mockMvc.perform(delete("/api/environments/env-123")
                         .header("X-User-Id", "user-001")
@@ -193,11 +173,8 @@ class EnvironmentControllerTest {
         response.setStatus(EnvironmentStatus.READY);
 
         when(environmentService.extendEnvironment(
-                anyString(),
-                anyString(),
-                anyString(),
-                anyInt()
-        )).thenReturn(response);
+                anyString(), anyString(), anyString(), anyInt()))
+                .thenReturn(response);
 
         mockMvc.perform(patch("/api/environments/env-123/extend")
                         .header("X-User-Id", "user-001")
