@@ -203,6 +203,27 @@ services:
     networks:
       - devspace-network
 
+  # ---------- React Frontend ----------
+  frontend:
+    image: devspace/frontend:local
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: devspace-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    environment:
+      TZ: Asia/Kolkata
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - devspace-network
+
 # ---------- Existing PostgreSQL Volume ----------
 volumes:
   postgres_data:

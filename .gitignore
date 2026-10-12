@@ -41,3 +41,5 @@ crash.log
 
 *:Zone.Identifier
 
+postgres-recovery-backup.tar.gz
+devspace-databases-backup.sql
