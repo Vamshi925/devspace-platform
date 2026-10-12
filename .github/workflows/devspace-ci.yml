@@ -1,0 +1,155 @@
+
+name: DevSpace CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Build & Test - ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - environment-service
+          - template-service
+          - provisioning-service
+          - login-service
+          - notification-service
+          - api-gateway
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/${{ matrix.service }}/pom.xml
+
+      - name: Build and Test
+        working-directory: services/${{ matrix.service }}
+        env:
+          APP_SEED_ENABLED: 'false'
+        run: mvn clean verify -B
+
+  frontend:
+    name: Build React Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install and Build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+  security:
+    name: Trivy Filesystem Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+  docker:
+    name: Docker Image - ${{ matrix.service }}
+    needs: [backend, frontend, security]
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - environment-service
+          - template-service
+          - provisioning-service
+          - login-service
+          - notification-service
+          - api-gateway
+          - frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve Image Context
+        id: image
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          if [ "$SERVICE" = "frontend" ]; then
+            echo "context=frontend" >> "$GITHUB_OUTPUT"
+          else
+            echo "context=services/$SERVICE" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Docker Image
+        env:
+          SERVICE: ${{ matrix.service }}
+          SHA: ${{ github.sha }}
+          CONTEXT: ${{ steps.image.outputs.context }}
+        run: |
+          docker build \
+            -t "devspace-$SERVICE:$SHA" \
+            "$CONTEXT"
+
+      - name: Scan Docker Image
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: devspace-${{ matrix.service }}:${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+      - name: Login to Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Publish Docker Image
+        if: github.event_name == 'push'
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          SERVICE: ${{ matrix.service }}
+          SHA: ${{ github.sha }}
+        run: |
+          IMAGE="$DOCKER_USERNAME/devspace-$SERVICE"
+          docker tag "devspace-$SERVICE:$SHA" "$IMAGE:$SHA"
+          docker tag "devspace-$SERVICE:$SHA" "$IMAGE:latest"
+          docker push "$IMAGE:$SHA"
+          docker push "$IMAGE:latest"
