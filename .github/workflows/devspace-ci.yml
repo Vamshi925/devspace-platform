@@ -14,6 +14,7 @@ jobs:
   backend:
     name: Build & Test - ${{ matrix.service }}
     runs-on: ubuntu-latest
+
     strategy:
       fail-fast: false
       matrix:
@@ -25,8 +26,23 @@ jobs:
           - notification-service
           - api-gateway
 
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: devspace
+          POSTGRES_PASSWORD: devspace_test_password
+          POSTGRES_DB: devspace_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U devspace -d devspace_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Java 21
@@ -37,10 +53,13 @@ jobs:
           cache: maven
           cache-dependency-path: services/${{ matrix.service }}/pom.xml
 
-      - name: Build and Test
+      - name: Build and Run Unit Tests
         working-directory: services/${{ matrix.service }}
         env:
           APP_SEED_ENABLED: 'false'
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/devspace_test
+          SPRING_DATASOURCE_USERNAME: devspace
+          SPRING_DATASOURCE_PASSWORD: devspace_test_password
         run: mvn clean verify -B
 
   frontend:
@@ -48,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js 22
@@ -58,22 +77,24 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install and Build
+      - name: Install Dependencies
         working-directory: frontend
-        run: |
-          npm ci
-          npm run build
+        run: npm ci
+
+      - name: Build React Application
+        working-directory: frontend
+        run: npm run build
 
   security:
     name: Trivy Filesystem Scan
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Run Trivy
-        uses: aquasecurity/trivy-action@0.36.0
+      - name: Run Trivy Filesystem Scan
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -99,7 +120,7 @@ jobs:
           - frontend
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Docker Buildx
@@ -126,8 +147,8 @@ jobs:
             -t "devspace-$SERVICE:$SHA" \
             "$CONTEXT"
 
-      - name: Scan Docker Image
-        uses: aquasecurity/trivy-action@0.36.0
+      - name: Run Trivy Image Scan
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: devspace-${{ matrix.service }}:${{ github.sha }}
           format: table
@@ -149,7 +170,9 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           IMAGE="$DOCKER_USERNAME/devspace-$SERVICE"
+
           docker tag "devspace-$SERVICE:$SHA" "$IMAGE:$SHA"
           docker tag "devspace-$SERVICE:$SHA" "$IMAGE:latest"
+
           docker push "$IMAGE:$SHA"
           docker push "$IMAGE:latest"
