@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devspace-template-service
+  namespace: devspace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devspace-template-service
+  template:
+    metadata:
+      labels:
+        app: devspace-template-service
+    spec:
+      containers:
+        - name: template-service
+          image: vamshi925/devspace-template-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8087
+          env:
+            - name: DB_URL
+              value: jdbc:postgresql://devspace-postgres:5432/devspace_template
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: devspace-postgres-secret
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: devspace-postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: DEVSPACE_GATEWAY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: devspace-auth-secret
+                  key: DEVSPACE_GATEWAY_KEY
+            - name: DEVSPACE_INTERNAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: devspace-auth-secret
+                  key: DEVSPACE_INTERNAL_API_KEY
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8087
+            periodSeconds: 10
+            failureThreshold: 18
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8087
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8087
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi

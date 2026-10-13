@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devspace-ingress
+  namespace: devspace
+  labels:
+    app.kubernetes.io/part-of: devspace-platform
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: devspace-frontend
+                port:
+                  number: 80

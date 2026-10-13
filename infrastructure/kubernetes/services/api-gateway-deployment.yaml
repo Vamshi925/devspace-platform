@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devspace-api-gateway
+  namespace: devspace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devspace-api-gateway
+  template:
+    metadata:
+      labels:
+        app: devspace-api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: vamshi925/devspace-api-gateway:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DEVSPACE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: devspace-auth-secret
+                  key: DEVSPACE_JWT_SECRET
+            - name: DEVSPACE_GATEWAY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: devspace-auth-secret
+                  key: DEVSPACE_GATEWAY_KEY
+            - name: ENVIRONMENT_SERVICE_URL
+              value: http://devspace-environment-service:8086
+            - name: TEMPLATE_SERVICE_URL
+              value: http://devspace-template-service:8087
+            - name: LOGIN_SERVICE_URL
+              value: http://devspace-login-service:8089
+            - name: NOTIFICATION_SERVICE_URL
+              value: http://devspace-notification-service:8090
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 18
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi

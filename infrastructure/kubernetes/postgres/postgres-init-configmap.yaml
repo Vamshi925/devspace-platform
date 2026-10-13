@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devspace-postgres-init
+  namespace: devspace
+data:
+  01-init-databases.sql: "SELECT 'CREATE DATABASE devspace_template'\nWHERE NOT EXISTS\
+    \ (\n  SELECT FROM pg_database WHERE datname = 'devspace_template'\n)\n\\gexec\n\
+    \nSELECT 'CREATE DATABASE devspace_login'\nWHERE NOT EXISTS (\n  SELECT FROM pg_database\
+    \ WHERE datname = 'devspace_login'\n)\n\\gexec\n\nSELECT 'CREATE DATABASE devspace_notification'\n\
+    WHERE NOT EXISTS (\n  SELECT FROM pg_database WHERE datname = 'devspace_notification'\n\
+    )\n\\gexec\n"

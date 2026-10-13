@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devspace-login-service
+  namespace: devspace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devspace-login-service
+  template:
+    metadata:
+      labels:
+        app: devspace-login-service
+    spec:
+      containers:
+        - name: login-service
+          image: vamshi925/devspace-login-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8089
+          env:
+            - name: DB_URL
+              value: jdbc:postgresql://devspace-postgres:5432/devspace_login
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: devspace-postgres-secret
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: devspace-postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: DEVSPACE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: devspace-auth-secret
+                  key: DEVSPACE_JWT_SECRET
+            - name: JWT_EXPIRATION_MS
+              value: "86400000"
+            - name: DEVSPACE_ADMIN_EMAIL
+              value: platformadmin@devspace.com
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8089
+            periodSeconds: 10
+            failureThreshold: 18
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8089
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8089
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi

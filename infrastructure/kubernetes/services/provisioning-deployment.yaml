@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devspace-provisioning-service
+  namespace: devspace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devspace-provisioning-service
+  template:
+    metadata:
+      labels:
+        app: devspace-provisioning-service
+    spec:
+      containers:
+        - name: provisioning-service
+          image: vamshi925/devspace-provisioning-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8088
+          env:
+            - name: ENVIRONMENT_SERVICE_URL
+              value: http://devspace-environment-service:8086
+            - name: KUBERNETES_MOCK
+              value: "true"
+            - name: INGRESS_BASE_URL
+              value: http://devspace.local
+            - name: DEVSPACE_INTERNAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: devspace-auth-secret
+                  key: DEVSPACE_INTERNAL_API_KEY
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8088
+            periodSeconds: 10
+            failureThreshold: 18
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8088
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8088
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi

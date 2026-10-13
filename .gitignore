@@ -43,3 +43,4 @@ crash.log
 
 postgres-recovery-backup.tar.gz
 devspace-databases-backup.sql
+backups/
